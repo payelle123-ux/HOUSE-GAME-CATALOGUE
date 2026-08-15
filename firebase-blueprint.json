@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A gaming product in the House Game catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "description": { "type": "string" },
+        "image": { "type": "string" },
+        "badge": { "type": "string" },
+        "inStock": { "type": "boolean" },
+        "featured": { "type": "boolean" },
+        "specs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "name", "category", "price", "description", "image", "inStock", "createdAt", "updatedAt"]
+    },
+    "ShopSettings": {
+      "title": "ShopSettings",
+      "description": "Store contact and general information for House Game",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "slogan": { "type": "string" },
+        "note": { "type": "string" },
+        "phone": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "openingHours": { "type": "string" },
+        "currency": { "type": "string" },
+        "adminPin": { "type": "string" }
+      },
+      "required": ["name", "phone", "whatsapp", "address"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "entity": "Product",
+      "description": "Catalog products for House Game"
+    },
+    "/settings/{settingId}": {
+      "entity": "ShopSettings",
+      "description": "Store settings document"
+    }
+  }
+}

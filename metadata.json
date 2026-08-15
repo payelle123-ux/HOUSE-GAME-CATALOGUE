@@ -1,0 +1,6 @@
+{
+  "name": "House Game - Catalogue Gaming",
+  "description": "Catalogue officiel House Game pour consoles, manettes et accessoires gaming avec commandes WhatsApp et espace pro",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
