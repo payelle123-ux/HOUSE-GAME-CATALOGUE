@@ -1,6 +1,6 @@
 {
-  "name": "House Game - Catalogue Gaming",
-  "description": "Catalogue officiel House Game pour consoles, manettes et accessoires gaming avec commandes WhatsApp et espace pro",
+  "name": "House Game - Hub Officiel Gaming",
+  "description": "Portail officiel House Game : Accueil & Présentation, Boutique & Vente WhatsApp, Atelier Réparation & Devis express, Events & Soirées gaming, Tournois Esport & Cash Prizes, et gestion d'onglets personnalisés.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

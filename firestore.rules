@@ -13,5 +13,35 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // Repair services collection
+    match /repair_services/{serviceId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Events collection
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Tournaments collection
+    match /tournaments/{tournamentId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Custom tabs collection
+    match /custom_tabs/{tabId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Home overview dynamic content
+    match /home_content/{contentId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }

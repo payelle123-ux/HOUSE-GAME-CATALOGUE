@@ -41,6 +41,97 @@
         "adminPin": { "type": "string" }
       },
       "required": ["name", "phone", "whatsapp", "address"]
+    },
+    "RepairService": {
+      "title": "RepairService",
+      "description": "Repair and workshop service item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "string" },
+        "delay": { "type": "string" },
+        "description": { "type": "string" },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "icon": { "type": "string" },
+        "badge": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "price", "description"]
+    },
+    "GamingEvent": {
+      "title": "GamingEvent",
+      "description": "House Game event item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "image": { "type": "string" },
+        "entry": { "type": "string" },
+        "status": { "type": "string" },
+        "badge": { "type": "string" },
+        "highlights": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "date", "description"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "Esport tournament at House Game",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "game": { "type": "string" },
+        "cashPrize": { "type": "string" },
+        "entryFee": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "location": { "type": "string" },
+        "maxSlots": { "type": "number" },
+        "currentSlots": { "type": "number" },
+        "platform": { "type": "string" },
+        "format": { "type": "string" },
+        "rules": { "type": "array", "items": { "type": "string" } },
+        "image": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "game", "cashPrize", "date"]
+    },
+    "CustomTab": {
+      "title": "CustomTab",
+      "description": "User created custom tab with dynamic items",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "icon": { "type": "string" },
+        "description": { "type": "string" },
+        "items": { "type": "array", "items": { "type": "object" } },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "slug"]
+    },
+    "HomeContent": {
+      "title": "HomeContent",
+      "description": "Customizable content for the home overview page",
+      "type": "object",
+      "properties": {
+        "heroTitle": { "type": "string" },
+        "heroSubtitle": { "type": "string" },
+        "presentationText": { "type": "string" },
+        "stats": { "type": "array", "items": { "type": "object" } },
+        "values": { "type": "array", "items": { "type": "object" } },
+        "bannerImage": { "type": "string" }
+      },
+      "required": ["heroTitle"]
     }
   },
   "firestore": {
@@ -51,6 +142,26 @@
     "/settings/{settingId}": {
       "entity": "ShopSettings",
       "description": "Store settings document"
+    },
+    "/repair_services/{serviceId}": {
+      "entity": "RepairService",
+      "description": "Repair and diagnosis workshop services"
+    },
+    "/events/{eventId}": {
+      "entity": "GamingEvent",
+      "description": "Gaming and launch events"
+    },
+    "/tournaments/{tournamentId}": {
+      "entity": "Tournament",
+      "description": "Esport official tournaments"
+    },
+    "/custom_tabs/{tabId}": {
+      "entity": "CustomTab",
+      "description": "Custom user-created navigation tabs"
+    },
+    "/home_content/{contentId}": {
+      "entity": "HomeContent",
+      "description": "Overview page dynamic content"
     }
   }
 }

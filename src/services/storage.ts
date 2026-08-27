@@ -1,10 +1,30 @@
-import { Product, ShopInfo, CartItem } from "../types";
+import {
+  Product,
+  ShopInfo,
+  CartItem,
+  RepairService,
+  GamingEvent,
+  Tournament,
+  CustomTab,
+  HomeContent,
+} from "../types";
 import { INITIAL_PRODUCTS } from "../data/initialData";
 import { DEFAULT_INFO } from "../data/logo";
+import {
+  INITIAL_HOME_CONTENT,
+  INITIAL_REPAIR_SERVICES,
+  INITIAL_EVENTS,
+  INITIAL_TOURNAMENTS,
+} from "../data/tabData";
 
 const PRODUCTS_KEY = "hg_products_v2";
 const INFO_KEY = "hg_shopinfo_v2";
 const CART_KEY = "hg_cart_v2";
+const REPAIRS_KEY = "hg_repairs_v2";
+const EVENTS_KEY = "hg_events_v2";
+const TOURNAMENTS_KEY = "hg_tournaments_v2";
+const CUSTOM_TABS_KEY = "hg_custom_tabs_v2";
+const HOME_CONTENT_KEY = "hg_home_content_v2";
 
 export function loadProducts(): Product[] {
   try {
@@ -79,6 +99,123 @@ export function saveCart(cart: CartItem[]): boolean {
   }
 }
 
+// Repair Services Storage
+export function loadRepairServices(): RepairService[] {
+  try {
+    const raw = localStorage.getItem(REPAIRS_KEY);
+    if (!raw) {
+      saveRepairServices(INITIAL_REPAIR_SERVICES);
+      return INITIAL_REPAIR_SERVICES;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_REPAIR_SERVICES;
+  } catch (err) {
+    return INITIAL_REPAIR_SERVICES;
+  }
+}
+
+export function saveRepairServices(services: RepairService[]): boolean {
+  try {
+    localStorage.setItem(REPAIRS_KEY, JSON.stringify(services));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+// Events Storage
+export function loadEvents(): GamingEvent[] {
+  try {
+    const raw = localStorage.getItem(EVENTS_KEY);
+    if (!raw) {
+      saveEvents(INITIAL_EVENTS);
+      return INITIAL_EVENTS;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_EVENTS;
+  } catch (err) {
+    return INITIAL_EVENTS;
+  }
+}
+
+export function saveEvents(events: GamingEvent[]): boolean {
+  try {
+    localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+// Tournaments Storage
+export function loadTournaments(): Tournament[] {
+  try {
+    const raw = localStorage.getItem(TOURNAMENTS_KEY);
+    if (!raw) {
+      saveTournaments(INITIAL_TOURNAMENTS);
+      return INITIAL_TOURNAMENTS;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_TOURNAMENTS;
+  } catch (err) {
+    return INITIAL_TOURNAMENTS;
+  }
+}
+
+export function saveTournaments(tournaments: Tournament[]): boolean {
+  try {
+    localStorage.setItem(TOURNAMENTS_KEY, JSON.stringify(tournaments));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+// Custom Tabs Storage
+export function loadCustomTabs(): CustomTab[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_TABS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+export function saveCustomTabs(tabs: CustomTab[]): boolean {
+  try {
+    localStorage.setItem(CUSTOM_TABS_KEY, JSON.stringify(tabs));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+// Home Content Storage
+export function loadHomeContent(): HomeContent {
+  try {
+    const raw = localStorage.getItem(HOME_CONTENT_KEY);
+    if (!raw) {
+      saveHomeContent(INITIAL_HOME_CONTENT);
+      return INITIAL_HOME_CONTENT;
+    }
+    const parsed = JSON.parse(raw);
+    return { ...INITIAL_HOME_CONTENT, ...parsed };
+  } catch (err) {
+    return INITIAL_HOME_CONTENT;
+  }
+}
+
+export function saveHomeContent(content: HomeContent): boolean {
+  try {
+    localStorage.setItem(HOME_CONTENT_KEY, JSON.stringify(content));
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
 export function formatPrice(value: number | string, currency: string = "FCFA"): string {
   const n = Number(value);
   if (Number.isNaN(n) || value === "" || value === undefined) return "Sur devis";
@@ -120,6 +257,7 @@ export function compressImage(file: File, maxDim = 1000, quality = 0.78): Promis
   });
 }
 
+// WhatsApp URL Generators
 export function buildWhatsAppProductUrl(phone: string, product: Product, currency: string = "FCFA"): string {
   const cleanPhone = phone.replace(/[^0-9]/g, "");
   const priceStr = formatPrice(product.price, currency);
@@ -127,10 +265,19 @@ export function buildWhatsAppProductUrl(phone: string, product: Product, currenc
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
 }
 
-export function buildWhatsAppCartUrl(phone: string, items: CartItem[], clientName = "", clientAddress = "", currency: string = "FCFA"): string {
+export function buildWhatsAppCartUrl(
+  phone: string,
+  items: CartItem[],
+  clientName = "",
+  clientAddress = "",
+  currency: string = "FCFA"
+): string {
   const cleanPhone = phone.replace(/[^0-9]/g, "");
-  const total = items.reduce((acc, item) => acc + (Number(item.product.price) || 0) * item.quantity, 0);
-  
+  const total = items.reduce(
+    (acc, item) => acc + (Number(item.product.price) || 0) * item.quantity,
+    0
+  );
+
   let listStr = "";
   items.forEach((item, index) => {
     const itemTotal = (Number(item.product.price) || 0) * item.quantity;
@@ -143,6 +290,74 @@ export function buildWhatsAppCartUrl(phone: string, items: CartItem[], clientNam
   text += `\n📦 *Articles commandés :*\n${listStr}\n`;
   text += `💵 *TOTAL ESTIMÉ :* *${formatPrice(total, currency)}*\n\n`;
   text += `Merci de me confirmer la disponibilité et les modalités de livraison !`;
+
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+}
+
+export function buildWhatsAppRepairQuoteUrl(
+  phone: string,
+  data: {
+    deviceType: string;
+    model: string;
+    issue: string;
+    urgency: string;
+    clientName?: string;
+  }
+): string {
+  const cleanPhone = phone.replace(/[^0-9]/g, "");
+  let text = `🛠️ *DEMANDE DE DEVIS EXPRESS - ATELIER HOUSE GAME*\n\n`;
+  if (data.clientName) text += `👤 *Client :* ${data.clientName}\n`;
+  text += `🎮 *Appareil :* ${data.deviceType} (${data.model || "Modèle standard"})\n`;
+  text += `⚡ *Panne / Problème :* ${data.issue}\n`;
+  text += `⏱️ *Délai souhaité :* ${data.urgency}\n\n`;
+  text += `Pouvez-vous me donner un tarif estimatif et la disponibilité pour la prise en charge à l'atelier ? Merci !`;
+
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+}
+
+export function buildWhatsAppTournamentRegistrationUrl(
+  phone: string,
+  data: {
+    tournament: Tournament;
+    gamerTag: string;
+    fullName: string;
+    playerPhone: string;
+    preferredPlatform?: string;
+  }
+): string {
+  const cleanPhone = phone.replace(/[^0-9]/g, "");
+  let text = `🏆 *INSCRIPTION TOURNOI ESPORT - HOUSE GAME*\n\n`;
+  text += `🎮 *Tournoi :* ${data.tournament.title}\n`;
+  text += `🕹️ *Jeu :* ${data.tournament.game}\n`;
+  text += `💰 *Cash Prize :* ${data.tournament.cashPrize}\n`;
+  text += `📅 *Date :* ${data.tournament.date} (${data.tournament.time})\n\n`;
+  text += `*--- INFORMATIONS DU PARTICIPANT ---*\n`;
+  text += `👑 *Pseudo Gamer / Tag :* ${data.gamerTag}\n`;
+  text += `👤 *Nom complet :* ${data.fullName}\n`;
+  text += `📞 *Téléphone / WhatsApp :* ${data.playerPhone}\n`;
+  if (data.preferredPlatform) text += `🎮 *Plateforme :* ${data.preferredPlatform}\n`;
+  text += `💵 *Frais d'inscription :* ${data.tournament.entryFee}\n\n`;
+  text += `Merci de confirmer la validation de ma place dans le tournoi !`;
+
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+}
+
+export function buildWhatsAppEventRsvpUrl(
+  phone: string,
+  data: {
+    event: GamingEvent;
+    fullName: string;
+    participantsCount: number;
+  }
+): string {
+  const cleanPhone = phone.replace(/[^0-9]/g, "");
+  let text = `🎉 *RÉSERVATION ÉVÉNEMENT - HOUSE GAME*\n\n`;
+  text += `✨ *Événement :* ${data.event.title}\n`;
+  text += `📅 *Date :* ${data.event.date} à ${data.event.time}\n`;
+  text += `📍 *Lieu :* ${data.event.location}\n`;
+  text += `👤 *Nom :* ${data.fullName}\n`;
+  text += `👥 *Nombre de personnes :* ${data.participantsCount}\n\n`;
+  text += `Merci de réserver ma place !`;
 
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
 }
