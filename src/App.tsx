@@ -35,6 +35,10 @@ import {
   saveCustomTabs,
   loadHomeContent,
   saveHomeContent,
+  loadHgEvents,
+  saveHgEvents,
+  loadTickerItems,
+  saveTickerItems,
 } from "./services/storage";
 import {
   subscribeToProducts,
@@ -61,6 +65,7 @@ import {
 
 // UI Components
 import { Header } from "./components/Header";
+import { TickerBanner } from "./components/TickerBanner";
 import { Navigation } from "./components/Navigation";
 import { Hero } from "./components/Hero";
 import { ProductCard } from "./components/ProductCard";
@@ -68,9 +73,14 @@ import { ProductDetailModal } from "./components/ProductDetailModal";
 import { CartDrawer } from "./components/CartDrawer";
 import { LoginModal, ProductFormModal, ShopSettingsModal } from "./components/AdminModal";
 import { Footer } from "./components/Footer";
+import { BoutiqueLegalSection } from "./components/BoutiqueLegalSection";
 
 // Tab Views
 import { HomeTab } from "./components/HomeTab";
+import { ActivitiesTab } from "./components/ActivitiesTab";
+import { HgEventTab } from "./components/HgEventTab";
+import { CampusTab } from "./components/CampusTab";
+import { ServiceTab } from "./components/ServiceTab";
 import { RepairTab } from "./components/RepairTab";
 import { EventsTab } from "./components/EventsTab";
 import { EsportTab } from "./components/EsportTab";
@@ -85,6 +95,16 @@ import {
   CustomTabModal,
   CustomTabItemModal,
 } from "./components/AdminModalsExtended";
+
+const ORDERED_CATEGORIES = [
+  "Tous",
+  "Consoles de jeux",
+  "Accessoires",
+  "Jeux vidéo",
+  "High-Tech",
+  "Jouet de Noël",
+  "Customisation",
+];
 
 export default function App() {
   // Navigation State
@@ -103,12 +123,14 @@ export default function App() {
   const [events, setEvents] = useState<GamingEvent[]>(() => loadEvents());
   const [tournaments, setTournaments] = useState<Tournament[]>(() => loadTournaments());
   const [customTabs, setCustomTabs] = useState<CustomTab[]>(() => loadCustomTabs());
+  const [hgEvents, setHgEvents] = useState(() => loadHgEvents());
+  const [tickerItems, setTickerItems] = useState(() => loadTickerItems());
 
   // Shop Filters & Search
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("Tous");
   const [onlyInStock, setOnlyInStock] = useState<boolean>(false);
-  const [sortBy, setSortBy] = useState<SortOption>("recent");
+  const [sortBy, setSortBy] = useState<SortOption>("name-asc");
 
   // Base Modals
   const [isLoginOpen, setIsLoginOpen] = useState<boolean>(false);
@@ -670,12 +692,18 @@ export default function App() {
     setItemToDelete(null);
   };
 
-  // Categories list for Shop
+  // Categories list for Shop (following requested order)
   const categories = useMemo(() => {
     const fromProducts = Array.from(
       new Set(products.map((p) => p.category).filter(Boolean))
+    ) as string[];
+    const orderedList = ORDERED_CATEGORIES.filter(
+      (cat) => cat === "Tous" || fromProducts.includes(cat)
     );
-    return ["Tous", ...fromProducts];
+    const remaining = fromProducts.filter(
+      (cat) => !ORDERED_CATEGORIES.includes(cat)
+    );
+    return [...orderedList, ...remaining];
   }, [products]);
 
   // Filtered & Sorted Products
@@ -730,6 +758,17 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
+      {/* Bannière Défilante Publicités & Infos Flash (Au-dessus de la ligne Accueil) */}
+      <TickerBanner
+        items={tickerItems}
+        onNavigateTab={(tabId) => setActiveTab(tabId as NavTabId)}
+        isAdmin={isAdmin}
+        onUpdateItems={(newItems) => {
+          setTickerItems(newItems);
+          saveTickerItems(newItems);
+        }}
+      />
+
       {/* Official Navigation Tabs Bar */}
       <Navigation
         activeTab={activeTab}
@@ -753,6 +792,11 @@ export default function App() {
             isAdmin={isAdmin}
             onOpenEditHome={() => setIsEditHomeOpen(true)}
             onNavigateTab={(tabId) => setActiveTab(tabId)}
+            onUpdateBannerImage={(newUrl) => {
+              const updated = { ...homeContent, bannerImage: newUrl };
+              setHomeContent(updated);
+              saveHomeContent(updated);
+            }}
           />
         )}
 
@@ -766,6 +810,9 @@ export default function App() {
               onSearchChange={setSearchQuery}
               totalProductsCount={products.length}
             />
+
+            {/* Sous-page Légale intégrée (CGV, Remboursement & Retour, Mode de paiement) */}
+            <BoutiqueLegalSection />
 
             {/* Controls Bar: Categories & Quick Filters */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-white/10 pb-6">
@@ -912,9 +959,40 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: RÉPARATION & ATELIER */}
-        {activeTab === "repair" && (
-          <RepairTab
+        {/* TAB 3: NOS ACTIVITES */}
+        {activeTab === "activities" && (
+          <ActivitiesTab
+            homeContent={homeContent}
+            shopInfo={shopInfo}
+            isAdmin={isAdmin}
+            onNavigateTab={(tabId) => setActiveTab(tabId)}
+          />
+        )}
+
+        {/* TAB 4: HG EVENT (Official 6 Events, Archives & Flyers) */}
+        {activeTab === "events" && (
+          <HgEventTab
+            events={hgEvents}
+            shopInfo={shopInfo}
+            isAdmin={isAdmin}
+            onUpdateEvents={(updated) => {
+              setHgEvents(updated);
+              saveHgEvents(updated);
+            }}
+          />
+        )}
+
+        {/* TAB 5: HG CAMPUS */}
+        {activeTab === "campus" && (
+          <CampusTab
+            shopInfo={shopInfo}
+            isAdmin={isAdmin}
+          />
+        )}
+
+        {/* TAB 6: HG SERVICE & RÉPARATION */}
+        {(activeTab === "service" || activeTab === "repair") && (
+          <ServiceTab
             services={repairServices}
             shopInfo={shopInfo}
             isAdmin={isAdmin}
@@ -930,25 +1008,7 @@ export default function App() {
           />
         )}
 
-        {/* TAB 4: EVENTS */}
-        {activeTab === "events" && (
-          <EventsTab
-            events={events}
-            shopInfo={shopInfo}
-            isAdmin={isAdmin}
-            onOpenAddEvent={() => {
-              setEditingEvent(null);
-              setIsEventModalOpen(true);
-            }}
-            onEditEvent={(evt) => {
-              setEditingEvent(evt);
-              setIsEventModalOpen(true);
-            }}
-            onDeleteEvent={(evt) => setEventToDelete(evt)}
-          />
-        )}
-
-        {/* TAB 5: ESPORT & TOURNOIS */}
+        {/* ESPORT & TOURNOIS (Accès direct) */}
         {activeTab === "esport" && (
           <EsportTab
             tournaments={tournaments}

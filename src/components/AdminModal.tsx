@@ -594,12 +594,12 @@ export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block font-bold text-[#D6DCE6]">NUMÉRO WHATSAPP</label>
+                  <label className="mb-1 block font-bold text-[#D6DCE6]">NUMÉRO WHATSAPP PRINCIPAL</label>
                   <input
                     type="text"
                     value={formData.whatsapp}
                     onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                    placeholder="+225 07..."
+                    placeholder="+237 658 413 269"
                     className="w-full rounded border border-white/10 bg-[#07090E] p-2.5 text-white placeholder-[#7C8798] focus:border-[#3E9BFF] focus:outline-none"
                   />
                 </div>
@@ -609,9 +609,48 @@ export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
                     type="text"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+225 07..."
+                    placeholder="+237 658 413 269"
                     className="w-full rounded border border-white/10 bg-[#07090E] p-2.5 text-white placeholder-[#7C8798] focus:border-[#3E9BFF] focus:outline-none"
                   />
+                </div>
+              </div>
+
+              {/* Ligne directe des conseillers pour le Footer */}
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2.5">
+                <div className="font-bold text-[#3E9BFF] text-[11px] uppercase tracking-wider">
+                  Numéros Directs des Conseillers (Footer & Commandes)
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="mb-1 block font-bold text-slate-300 text-[10px]">PAYELLE</label>
+                    <input
+                      type="text"
+                      value={formData.phonePayelle || ""}
+                      onChange={(e) => setFormData({ ...formData, phonePayelle: e.target.value })}
+                      placeholder="+237 658 413 269"
+                      className="w-full rounded border border-white/10 bg-[#07090E] p-2 text-white placeholder-[#7C8798] focus:border-[#3E9BFF] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-bold text-slate-300 text-[10px]">FLORENCE</label>
+                    <input
+                      type="text"
+                      value={formData.phoneFlorence || ""}
+                      onChange={(e) => setFormData({ ...formData, phoneFlorence: e.target.value })}
+                      placeholder="+237 694 853 477"
+                      className="w-full rounded border border-white/10 bg-[#07090E] p-2 text-white placeholder-[#7C8798] focus:border-[#3E9BFF] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-bold text-slate-300 text-[10px]">GAËTAN</label>
+                    <input
+                      type="text"
+                      value={formData.phoneGaetan || ""}
+                      onChange={(e) => setFormData({ ...formData, phoneGaetan: e.target.value })}
+                      placeholder="+237 695 978 762"
+                      className="w-full rounded border border-white/10 bg-[#07090E] p-2 text-white placeholder-[#7C8798] focus:border-[#3E9BFF] focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -621,7 +660,7 @@ export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
                   type="text"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="ex: Abidjan, Côte d'Ivoire"
+                  placeholder="ex: Cameroun"
                   className="w-full rounded border border-white/10 bg-[#07090E] p-2.5 text-white placeholder-[#7C8798] focus:border-[#3E9BFF] focus:outline-none"
                 />
               </div>

@@ -444,7 +444,7 @@ export const GamingEventModal: React.FC<GamingEventModalProps> = ({
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [location, setLocation] = useState("Salle Gaming House Game - Brazzaville");
+  const [location, setLocation] = useState("Salle Gaming House Game - Cameroun");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
   const [entry, setEntry] = useState("Gratuit");
@@ -468,7 +468,7 @@ export const GamingEventModal: React.FC<GamingEventModalProps> = ({
       setTitle("");
       setDate("Samedi 15 Octobre 2026");
       setTime("15h00 - 20h00");
-      setLocation("Salle Gaming House Game - Brazzaville");
+      setLocation("Salle Gaming House Game - Cameroun");
       setDescription("");
       setImage("https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=80");
       setEntry("Gratuit (Sur inscription)");
@@ -668,7 +668,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
   const [entryFee, setEntryFee] = useState("5 000 FCFA / Joueur");
   const [date, setDate] = useState("Samedi 19 Septembre 2026");
   const [time, setTime] = useState("10h00");
-  const [location, setLocation] = useState("Arène Esport House Game - Brazzaville");
+  const [location, setLocation] = useState("Arène Esport House Game - Cameroun");
   const [maxSlots, setMaxSlots] = useState<number>(64);
   const [currentSlots, setCurrentSlots] = useState<number>(0);
   const [platform, setPlatform] = useState("PlayStation 5");

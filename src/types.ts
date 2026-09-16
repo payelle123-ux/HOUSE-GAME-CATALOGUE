@@ -14,12 +14,23 @@ export interface Product {
   updatedAt: number;
 }
 
+export interface ShopContact {
+  name: string;
+  role: string;
+  phone: string;
+  whatsapp: string;
+}
+
 export interface ShopInfo {
   name: string;
   slogan: string;
   note: string;
   phone: string;
   whatsapp: string;
+  phonePayelle?: string;
+  phoneGaetan?: string;
+  phoneFlorence?: string;
+  email?: string;
   address: string;
   city: string;
   openingHours: string;
@@ -32,7 +43,15 @@ export interface CartItem {
   quantity: number;
 }
 
-export type SortOption = "featured" | "price-asc" | "price-desc" | "name-asc" | "recent";
+export type SortOption = "name-asc" | "recent" | "featured" | "price-asc" | "price-desc";
+
+export interface TickerItem {
+  id: string;
+  tag: string;
+  text: string;
+  linkTab?: string;
+  highlight?: boolean;
+}
 
 export interface RepairService {
   id: string;
@@ -45,6 +64,38 @@ export interface RepairService {
   icon?: string;
   badge?: string;
   createdAt: number;
+}
+
+export interface EventArchivePhoto {
+  id: string;
+  title: string;
+  imageUrl: string;
+  editionDate?: string;
+}
+
+export interface HgEventItem {
+  id: string;
+  title: string;
+  slug: "apero-gaming" | "house-game-day" | "hg-challenge" | "question-pour-gameur" | "afro-respawn" | "fashion-week-otaku" | string;
+  definition: string;
+  iconName?: string;
+  badge?: string;
+  nextEdition?: {
+    title: string;
+    date: string;
+    time: string;
+    location: string;
+    flyerUrl: string;
+    entryFee: string;
+    description: string;
+    bookingOpen: boolean;
+  };
+  archives: EventArchivePhoto[];
+  customLink?: {
+    label: string;
+    url: string;
+    note?: string;
+  };
 }
 
 export interface GamingEvent {
@@ -109,10 +160,11 @@ export interface HomeStat {
   desc: string;
 }
 
-export interface HomeValue {
-  title: string;
-  desc: string;
-  iconName: string;
+export interface HomePartner {
+  name: string;
+  category: string;
+  logo: string;
+  tagline: string;
 }
 
 export interface HomeContent {
@@ -121,7 +173,45 @@ export interface HomeContent {
   presentationText: string;
   bannerImage: string;
   stats: HomeStat[];
-  values: HomeValue[];
+  partners?: HomePartner[];
+  aboutText?: string;
 }
 
-export type NavTabId = "home" | "shop" | "repair" | "events" | "esport" | string;
+export type NavTabId =
+  | "home"
+  | "shop"
+  | "activities"
+  | "events"
+  | "campus"
+  | "service"
+  | string;
+
+export interface TickerItem {
+  id: string;
+  tag: string;
+  text: string;
+  linkTab?: string;
+  highlight?: boolean;
+}
+
+export interface CampusModule {
+  id: string;
+  title: string;
+  level: string;
+  duration: string;
+  iconName?: string;
+  color?: string;
+  description: string;
+  outcomes: string[];
+  price?: string;
+}
+
+export interface CampusInfo {
+  badge: string;
+  heroTitle: string;
+  heroDescription: string;
+  partnerTitle: string;
+  partnerDescription: string;
+  partnerButtonText: string;
+}
+
