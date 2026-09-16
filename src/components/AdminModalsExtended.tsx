@@ -128,13 +128,48 @@ export const HomeContentModal: React.FC<HomeContentModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-[#A0AEC0] mb-1">Image de Bannière (URL) :</label>
-            <input
-              type="url"
-              value={bannerImage}
-              onChange={(e) => setBannerImage(e.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-[#141824] px-3 py-2.5 text-white focus:border-amber-400 focus:outline-none"
-            />
+            <label className="block text-[#A0AEC0] mb-1 font-bold">Image de Bannière d'accueil :</label>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={bannerImage}
+                  onChange={(e) => setBannerImage(e.target.value)}
+                  placeholder="URL de l'image ou importez un fichier..."
+                  className="flex-1 rounded-lg border border-white/15 bg-[#141824] px-3 py-2.5 text-white focus:border-amber-400 focus:outline-none text-xs"
+                />
+                <label className="cursor-pointer flex items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/20 transition">
+                  <Upload size={14} />
+                  <span>Importer</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        try {
+                          const compressed = await compressImage(file, 1300, 0.78);
+                          setBannerImage(compressed);
+                        } catch (err) {
+                          console.error("Error compressing banner:", err);
+                        }
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              {bannerImage && (
+                <div className="relative overflow-hidden rounded-lg border border-white/10 bg-black/40 h-24 flex items-center justify-center">
+                  <img
+                    src={bannerImage}
+                    alt="Aperçu Bannière"
+                    referrerPolicy="no-referrer"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           <div>

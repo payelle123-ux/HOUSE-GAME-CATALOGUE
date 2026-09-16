@@ -235,7 +235,11 @@ export function loadHomeContent(): HomeContent {
       return INITIAL_HOME_CONTENT;
     }
     const parsed = JSON.parse(raw);
-    if (!parsed.bannerImage || parsed.bannerImage.includes("photo-1542751371-adc38448a05e")) {
+    if (
+      !parsed.bannerImage ||
+      parsed.bannerImage.includes("photo-1542751371-adc38448a05e") ||
+      parsed.bannerImage.includes("house_game_banner_1789577924653")
+    ) {
       parsed.bannerImage = INITIAL_HOME_CONTENT.bannerImage;
     }
     return { ...INITIAL_HOME_CONTENT, ...parsed };

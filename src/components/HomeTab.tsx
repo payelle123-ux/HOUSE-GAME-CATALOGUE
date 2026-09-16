@@ -13,6 +13,10 @@ import {
   Upload,
   X,
   RotateCcw,
+  Database,
+  CheckCircle2,
+  Loader2,
+  Image as ImageIcon,
 } from "lucide-react";
 import { HomeContent, ShopInfo, NavTabId } from "../types";
 import { OFFICIAL_BANNER_SRC } from "../data/logo";
@@ -24,7 +28,7 @@ interface HomeTabProps {
   isAdmin: boolean;
   onOpenEditHome: () => void;
   onNavigateTab: (tabId: NavTabId) => void;
-  onUpdateBannerImage?: (newUrl: string) => void;
+  onUpdateBannerImage?: (newUrl: string) => Promise<void> | void;
 }
 
 export const HomeTab: React.FC<HomeTabProps> = ({
@@ -39,43 +43,80 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
   const [customBannerUrl, setCustomBannerUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isSavingCloud, setIsSavingCloud] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Active banner image (falls back to the official House Game banner)
   const currentBanner = homeContent.bannerImage || OFFICIAL_BANNER_SRC;
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processAndSaveImage = async (imageUrl: string) => {
+    if (!onUpdateBannerImage) return;
+    try {
+      setIsSavingCloud(true);
+      setSyncError(null);
+      await onUpdateBannerImage(imageUrl);
+      setSyncSuccess(true);
+      setTimeout(() => {
+        setSyncSuccess(false);
+        setIsBannerModalOpen(false);
+      }, 1400);
+    } catch (err) {
+      console.error("Erreur de synchronisation Firestore :", err);
+      setSyncError("Erreur lors de la synchronisation avec la base de données. Vérifiez votre connexion.");
+    } finally {
+      setIsSavingCloud(false);
+    }
+  };
+
+  const handleFileProcess = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setSyncError("Veuillez sélectionner un fichier image valide (JPG, PNG, WEBP).");
+      return;
+    }
     try {
       setIsUploading(true);
-      const compressed = await compressImage(file, 1600, 0.85);
-      if (onUpdateBannerImage) {
-        onUpdateBannerImage(compressed);
-      }
-      setIsBannerModalOpen(false);
+      setSyncError(null);
+      // Compress to optimal resolution to fit effortlessly within Firestore 1MB document quota
+      const compressed = await compressImage(file, 1300, 0.78);
+      await processAndSaveImage(compressed);
     } catch (err) {
-      console.error("Error uploading banner image:", err);
-      alert("Erreur lors du traitement de l'image.");
+      console.error("Error processing banner file:", err);
+      setSyncError("Erreur lors de la compression de l'image.");
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleSaveUrl = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (customBannerUrl.trim() && onUpdateBannerImage) {
-      onUpdateBannerImage(customBannerUrl.trim());
-      setIsBannerModalOpen(false);
-      setCustomBannerUrl("");
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await handleFileProcess(file);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
-  const handleResetDefaultBanner = () => {
-    if (onUpdateBannerImage) {
-      onUpdateBannerImage(OFFICIAL_BANNER_SRC);
-      setIsBannerModalOpen(false);
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await handleFileProcess(file);
     }
+  };
+
+  const handleSaveUrl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customBannerUrl.trim()) return;
+    await processAndSaveImage(customBannerUrl.trim());
+    setCustomBannerUrl("");
+  };
+
+  const handleResetDefaultBanner = async () => {
+    await processAndSaveImage(OFFICIAL_BANNER_SRC);
   };
 
   return (
@@ -136,24 +177,26 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             <button
               onClick={() => setIsLightboxOpen(true)}
               id="btn-zoom-banner"
-              className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/70 backdrop-blur-md px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-lg hover:bg-[#3E9BFF] hover:border-[#3E9BFF] transition-all"
+              className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/70 backdrop-blur-md px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-lg hover:bg-[#3E9BFF] hover:border-[#3E9BFF] transition-all cursor-pointer"
               title="Agrandir en plein écran"
             >
               <Maximize2 size={13} />
               <span className="hidden sm:inline">Plein écran</span>
             </button>
 
-            {isAdmin && (
-              <button
-                onClick={() => setIsBannerModalOpen(true)}
-                id="btn-admin-edit-banner"
-                className="flex items-center gap-1.5 rounded-lg border border-amber-400/50 bg-black/80 backdrop-blur-md px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-amber-300 shadow-lg hover:bg-amber-500 hover:text-black transition-all"
-                title="Modifier l'image de cette bannière"
-              >
-                <Upload size={13} />
-                <span className="hidden sm:inline">Changer l'image</span>
-              </button>
-            )}
+            <button
+              onClick={() => {
+                setSyncSuccess(false);
+                setSyncError(null);
+                setIsBannerModalOpen(true);
+              }}
+              id="btn-change-banner"
+              className="flex items-center gap-1.5 rounded-lg border border-amber-400/50 bg-black/80 backdrop-blur-md px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-amber-300 shadow-lg hover:bg-amber-500 hover:text-black hover:border-amber-400 transition-all cursor-pointer"
+              title="Changer la bannière et synchroniser avec la base de données Firestore"
+            >
+              <Database size={13} className="text-emerald-400" />
+              <span>Changer la bannière</span>
+            </button>
           </div>
         </div>
       </section>
@@ -383,87 +426,179 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       )}
 
       {/* ========================================================= */}
-      {/* MODAL 2 : ADMIN CHANGER L'IMAGE DE LA BANNIÈRE */}
+      {/* MODAL 2 : CHANGER LA BANNIÈRE & SYNCHRONISATION BDD */}
       {/* ========================================================= */}
       {isBannerModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm animate-fadeIn"
-          onClick={() => setIsBannerModalOpen(false)}
+          onClick={() => {
+            if (!isSavingCloud && !isUploading) setIsBannerModalOpen(false);
+          }}
         >
           <div
-            className="w-full max-w-lg rounded-2xl border border-amber-500/40 bg-[#12151E] p-6 shadow-2xl space-y-5"
+            className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-amber-500/40 bg-[#12151E] p-6 shadow-2xl space-y-5"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2 text-amber-400 font-bold font-['Orbitron']">
-                <Upload size={18} />
-                <span>MODIFIER LA BANNIÈRE D'ACCUEIL</span>
+              <div className="flex items-center gap-2.5 text-amber-400 font-bold font-['Orbitron'] text-sm">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
+                  <Database size={16} />
+                </div>
+                <div>
+                  <span className="block text-white font-bold">MODIFIER LA BANNIÈRE</span>
+                  <span className="text-[10px] text-amber-300/80 font-['JetBrains_Mono'] tracking-normal">
+                    SYNCHRONISATION EN TEMPS RÉEL SUR LA BASE DE DONNÉES
+                  </span>
+                </div>
               </div>
               <button
+                disabled={isSavingCloud || isUploading}
                 onClick={() => setIsBannerModalOpen(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white disabled:opacity-40 transition"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
+            {/* Cloud Sync Status Indicator */}
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs text-emerald-300">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="font-bold text-[11px]">Base de données Firestore connectée</span>
+              </div>
+              <span className="rounded bg-emerald-950/60 px-2 py-0.5 text-[10px] font-mono text-emerald-400 border border-emerald-500/20">
+                ai-studio-housegame...
+              </span>
+            </div>
+
+            {/* Notification Messages */}
+            {syncSuccess && (
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/20 p-3 text-xs text-emerald-200 font-['JetBrains_Mono'] animate-fadeIn">
+                <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
+                <span>Bannière enregistrée et synchronisée avec succès dans la base de données Firestore !</span>
+              </div>
+            )}
+
+            {syncError && (
+              <div className="flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/20 p-3 text-xs text-red-200 font-['JetBrains_Mono'] animate-fadeIn">
+                <X size={16} className="text-red-400 flex-shrink-0" />
+                <span>{syncError}</span>
+              </div>
+            )}
+
+            {/* Current Banner Preview */}
+            <div className="space-y-1.5 font-['JetBrains_Mono'] text-xs">
+              <label className="block text-slate-300 font-bold text-[11px]">
+                Aperçu de la bannière actuelle :
+              </label>
+              <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black/60 aspect-[21/9] flex items-center justify-center">
+                <img
+                  src={currentBanner}
+                  alt="Aperçu Bannière"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-contain"
+                />
+                {isSavingCloud && (
+                  <div className="absolute inset-0 bg-black/80 backdrop-blur-xs flex flex-col items-center justify-center gap-2 z-10 text-white font-['JetBrains_Mono'] text-xs">
+                    <Loader2 size={24} className="animate-spin text-amber-400" />
+                    <span>Synchronisation avec la base de données...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="space-y-4 font-['JetBrains_Mono'] text-xs">
-              {/* Option A: Upload file from computer/device */}
-              <div className="rounded-xl border border-white/10 bg-[#0E1119] p-4 space-y-3">
-                <label className="block text-slate-300 font-bold">
-                  OPTION 1 : Importer une image depuis votre appareil
-                </label>
+              {/* Option A: Upload file with Drag & Drop */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+                className={`rounded-xl border transition-all p-4 space-y-3 ${
+                  isDragging
+                    ? "border-[#3E9BFF] bg-[#3E9BFF]/15 ring-2 ring-[#3E9BFF]/30"
+                    : "border-white/10 bg-[#0E1119]"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-300 font-bold flex items-center gap-2">
+                    <ImageIcon size={14} className="text-[#3E9BFF]" />
+                    <span>OPTION 1 : Importer depuis votre appareil</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400">Glisser-déposer ou clic</span>
+                </div>
+
                 <input
                   type="file"
                   ref={fileInputRef}
-                  accept="image/*"
+                  accept="image/png,image/jpeg,image/webp,image/jpg"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
+
                 <button
                   type="button"
-                  disabled={isUploading}
+                  disabled={isUploading || isSavingCloud}
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#3E9BFF]/50 bg-[#3E9BFF]/10 py-4 text-[#3E9BFF] hover:bg-[#3E9BFF]/20 transition"
+                  className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#3E9BFF]/40 bg-[#3E9BFF]/10 py-5 px-4 text-[#3E9BFF] hover:bg-[#3E9BFF]/20 hover:border-[#3E9BFF] transition cursor-pointer disabled:opacity-50"
                 >
-                  <Upload size={16} />
-                  <span>
-                    {isUploading ? "Compression & import..." : "Sélectionner une image (JPG, PNG)"}
-                  </span>
+                  {isUploading ? (
+                    <>
+                      <Loader2 size={22} className="animate-spin text-[#3E9BFF]" />
+                      <span className="font-bold">Optimisation & compression de l'image...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={22} className="text-[#3E9BFF]" />
+                      <span className="font-bold text-white">
+                        Glissez une image ici ou cliquez pour sélectionner
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        Format recommandé : 16:9 ou 21:9 (JPG, PNG, WEBP) • Compression automatique pour Firestore
+                      </span>
+                    </>
+                  )}
                 </button>
-                <p className="text-[10px] text-slate-400">
-                  Recommandé : image horizontale (ratio 16:9 ou 21:9) pour un affichage optimal.
-                </p>
               </div>
 
               {/* Option B: Enter URL */}
               <form onSubmit={handleSaveUrl} className="rounded-xl border border-white/10 bg-[#0E1119] p-4 space-y-3">
                 <label className="block text-slate-300 font-bold">
-                  OPTION 2 : Ou renseigner une adresse URL
+                  OPTION 2 : Ou renseigner une adresse URL directe
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="url"
                     value={customBannerUrl}
                     onChange={(e) => setCustomBannerUrl(e.target.value)}
-                    placeholder="https://example.com/banniere.jpg"
-                    className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-slate-500 focus:border-[#3E9BFF] focus:outline-none"
+                    placeholder="https://example.com/ma-nouvelle-banniere.jpg"
+                    disabled={isSavingCloud || isUploading}
+                    className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-slate-500 focus:border-[#3E9BFF] focus:outline-none disabled:opacity-50"
                   />
                   <button
                     type="submit"
-                    className="rounded-lg bg-[#3E9BFF] px-4 py-2 font-bold text-white hover:bg-[#3282db] transition"
+                    disabled={!customBannerUrl.trim() || isSavingCloud || isUploading}
+                    className="rounded-lg bg-[#3E9BFF] px-4 py-2 font-bold text-white hover:bg-[#3282db] transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
                   >
-                    Valider
+                    {isSavingCloud ? <Loader2 size={13} className="animate-spin" /> : null}
+                    <span>Appliquer</span>
                   </button>
                 </div>
               </form>
 
               {/* Reset Option */}
-              <div className="pt-2 flex items-center justify-between border-t border-white/10">
+              <div className="pt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/10">
                 <button
                   type="button"
+                  disabled={isSavingCloud || isUploading}
                   onClick={handleResetDefaultBanner}
-                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-amber-300 transition"
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-amber-300 transition cursor-pointer disabled:opacity-40"
                 >
                   <RotateCcw size={13} />
                   <span>Rétablir l'affiche officielle House Game</span>
@@ -471,10 +606,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
 
                 <button
                   type="button"
+                  disabled={isSavingCloud || isUploading}
                   onClick={() => setIsBannerModalOpen(false)}
-                  className="rounded-lg border border-white/10 px-4 py-1.5 text-slate-300 hover:text-white"
+                  className="rounded-lg border border-white/15 px-4 py-1.5 text-slate-300 hover:text-white hover:bg-white/5 transition cursor-pointer"
                 >
-                  Annuler
+                  Fermer
                 </button>
               </div>
             </div>

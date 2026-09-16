@@ -61,6 +61,7 @@ import {
   deleteCustomTabCloud,
   subscribeToHomeContent,
   saveHomeContentCloud,
+  updateBannerImageCloud,
 } from "./services/firebaseService";
 
 // UI Components
@@ -792,10 +793,16 @@ export default function App() {
             isAdmin={isAdmin}
             onOpenEditHome={() => setIsEditHomeOpen(true)}
             onNavigateTab={(tabId) => setActiveTab(tabId)}
-            onUpdateBannerImage={(newUrl) => {
+            onUpdateBannerImage={async (newUrl) => {
               const updated = { ...homeContent, bannerImage: newUrl };
               setHomeContent(updated);
               saveHomeContent(updated);
+              try {
+                await updateBannerImageCloud(newUrl);
+              } catch (err) {
+                console.error("Erreur lors de la synchronisation Firestore de la bannière:", err);
+                throw err;
+              }
             }}
           />
         )}

@@ -1,4 +1,4 @@
-import officialBanner from "../assets/images/house_game_banner_1789577924653.jpg";
+import officialBanner from "../assets/images/house_game_official_banner_1789579516482.jpg";
 
 export const OFFICIAL_BANNER_SRC = officialBanner;
 
