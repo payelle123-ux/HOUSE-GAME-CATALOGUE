@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+  <defs>
+    <!-- Blue swoosh gradient -->
+    <linearGradient id="hg-swoosh-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1E3A8A" />
+      <stop offset="30%" stop-color="#2563EB" />
+      <stop offset="70%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#93C5FD" stop-opacity="0.8" />
+    </linearGradient>
+
+    <!-- House Red Gradient -->
+    <linearGradient id="hg-red-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C53030" />
+      <stop offset="100%" stop-color="#9B1C1C" />
+    </linearGradient>
+
+    <!-- Shadow filter -->
+    <filter id="hg-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.25" flood-color="#000" />
+    </filter>
+
+    <!-- Text curve path for HOUSE -->
+    <path id="curve-house" d="M 125 155 Q 185 110 245 130" fill="none" />
+    <!-- Text curve path for GAME -->
+    <path id="curve-game" d="M 265 130 Q 325 110 385 155" fill="none" />
+    <!-- Text curve path for Slogan on Swoosh -->
+    <path id="curve-slogan" d="M 170 395 Q 260 415 350 375" fill="none" />
+  </defs>
+
+  <!-- Group with slight drop shadow -->
+  <g filter="url(#hg-shadow)">
+    <!-- TOP CURVED TEXT -->
+    <!-- HOUSE -->
+    <text
+      fill="#B91C1C"
+      font-size="36"
+      font-weight="900"
+      font-family="'Orbitron', 'Impact', sans-serif"
+      letter-spacing="4"
+      stroke="#7F1D1D"
+      stroke-width="1"
+    >
+      <textPath href="#curve-house" startOffset="50%" text-anchor="middle">
+        HOUSE
+      </textPath>
+    </text>
+
+    <!-- GAME -->
+    <text
+      fill="#2563EB"
+      font-size="36"
+      font-weight="900"
+      font-family="'Orbitron', 'Impact', sans-serif"
+      letter-spacing="4"
+      stroke="#1E40AF"
+      stroke-width="1"
+    >
+      <textPath href="#curve-game" startOffset="50%" text-anchor="middle">
+        GAME
+      </textPath>
+    </text>
+
+    <!-- BLUE CHIMNEY ON ROOF -->
+    <rect
+      x="192"
+      y="180"
+      width="18"
+      height="55"
+      fill="#1E40AF"
+      stroke="#172554"
+      stroke-width="2"
+      rx="1"
+    />
+
+    <!-- RED HOUSE SHAPE -->
+    <path
+      d="M 175 370 L 175 255 L 255 145 L 335 255 L 335 340"
+      stroke="url(#hg-red-grad)"
+      stroke-width="18"
+      stroke-linecap="square"
+      stroke-linejoin="miter"
+      fill="none"
+    />
+
+    <!-- WHITE BACKGROUND BACKPLATE FOR INTERIOR -->
+    <path
+      d="M 184 365 L 184 258 L 255 160 L 326 258 L 326 335 Z"
+      fill="#FFFFFF"
+    />
+
+    <!-- CONTROLLER BODY -->
+    <path
+      d="M 215 220 
+         C 230 216, 280 216, 295 220
+         C 315 224, 322 245, 318 285
+         C 315 315, 292 318, 280 295
+         C 274 285, 268 280, 255 280
+         C 242 280, 236 285, 230 295
+         C 218 318, 195 315, 192 285
+         C 188 245, 195 224, 215 220 Z"
+      fill="#FFFFFF"
+      stroke="#111827"
+      stroke-width="6"
+      stroke-linejoin="round"
+    />
+
+    <!-- D-PAD (Left Cross) -->
+    <path
+      d="M 225 245 H 231 V 239 H 237 V 245 H 243 V 251 H 237 V 257 H 231 V 251 H 225 Z"
+      fill="#111827"
+    />
+
+    <!-- ACTION BUTTONS (Right Dots) -->
+    <circle cx="282" cy="242" r="3" fill="#111827" />
+    <circle cx="274" cy="250" r="3" fill="#111827" />
+    <circle cx="290" cy="250" r="3" fill="#111827" />
+    <circle cx="282" cy="258" r="3" fill="#111827" />
+
+    <!-- BLACK HAND HOLDING THE CONTROLLER & TROPHY BASE -->
+    <rect x="238" y="212" width="5.5" height="18" rx="2.5" fill="#111827" />
+    <rect x="246" y="210" width="5.5" height="20" rx="2.5" fill="#111827" />
+    <rect x="254" y="210" width="5.5" height="20" rx="2.5" fill="#111827" />
+    <rect x="262" y="212" width="5.5" height="18" rx="2.5" fill="#111827" />
+
+    <!-- Hand wrist & thumb holding bottom of controller -->
+    <path
+      d="M 235 285
+         C 240 270, 270 270, 275 285
+         L 282 315
+         C 285 330, 260 340, 255 340
+         C 250 340, 225 330, 228 315
+         Z"
+      fill="#111827"
+    />
+
+    <!-- Thumb curled over center -->
+    <path
+      d="M 248 262 C 255 262, 268 268, 268 278 C 268 288, 255 292, 245 285 Z"
+      fill="#111827"
+    />
+
+    <!-- TROPHY BASE / STAND -->
+    <path
+      d="M 235 340 L 275 340 L 280 358 L 230 358 Z"
+      fill="#FFFFFF"
+      stroke="#111827"
+      stroke-width="3.5"
+      stroke-linejoin="round"
+    />
+    <rect
+      x="226"
+      y="358"
+      width="58"
+      height="8"
+      rx="2"
+      fill="#FFFFFF"
+      stroke="#111827"
+      stroke-width="3.5"
+    />
+
+    <!-- BLUE SWOOSH / ORBITAL BANNER -->
+    <path
+      d="M 125 315
+         C 120 375, 185 418, 275 410
+         C 335 405, 375 365, 385 310
+         C 382 345, 345 385, 275 392
+         C 195 400, 142 360, 148 315 Z"
+      fill="url(#hg-swoosh-grad)"
+    />
+
+    <!-- SLOGAN TEXT ON SWOOSH -->
+    <text
+      fill="#FFFFFF"
+      font-size="14"
+      font-weight="bold"
+      font-style="italic"
+      font-family="'Chakra Petch', 'Arial', sans-serif"
+      letter-spacing="0.5"
+    >
+      <textPath href="#curve-slogan" startOffset="50%" text-anchor="middle">
+        La qualité n'a pas de prix
+      </textPath>
+    </text>
+  </g>
+</svg>
