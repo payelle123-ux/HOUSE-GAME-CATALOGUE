@@ -41,6 +41,7 @@ import {
   AlertTriangle,
   Image,
 } from "lucide-react";
+import { sfx } from "../services/soundEffects";
 
 interface ActivitiesTabProps {
   homeContent: HomeContent;
@@ -614,10 +615,40 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
             const styles = getAccentStyles(act.accentColor);
             const IconComponent = AVAILABLE_ICONS[act.iconName] || Gamepad2;
 
+            // Micro-animation selector depending on category / icon
+            const getIconAnimClass = () => {
+              if (act.iconName === "Gamepad2" || act.iconName === "Gamepad" || act.category.includes("Gaming") || act.category.includes("Jeux")) {
+                return "icon-wobble";
+              }
+              if (act.iconName === "Glasses" || act.category.includes("VR")) {
+                return "icon-pulse-vr";
+              }
+              if (act.iconName === "Joystick" || act.category.includes("Rétro") || act.category.includes("Arcade")) {
+                return "icon-retro";
+              }
+              if (act.iconName === "Music" || act.category.includes("Danse") || act.category.includes("Dance")) {
+                return "icon-dance";
+              }
+              if (act.iconName === "Wifi" || act.category.includes("Internet") || act.category.includes("Connexion")) {
+                return "icon-wifi";
+              }
+              if (act.iconName === "Trophy" || act.category.includes("Tournoi") || act.category.includes("Esport") || act.category.includes("Compétition")) {
+                return "icon-trophy";
+              }
+              if (act.iconName === "Wrench" || act.category.includes("Réparation") || act.category.includes("Maintenance") || act.category.includes("Atelier")) {
+                return "icon-wrench";
+              }
+              if (act.iconName === "Briefcase" || act.category.includes("Working") || act.category.includes("Coworking") || act.category.includes("Espace")) {
+                return "icon-cowork";
+              }
+              return "group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300";
+            };
+
             return (
               <div
                 key={act.id}
-                className={`relative rounded-2xl border border-white/10 bg-[#0E121B] p-6 flex flex-col justify-between ${styles.borderHover} hover:bg-[#121624] transition-all duration-300 space-y-5 group shadow-lg`}
+                onMouseEnter={() => sfx.playHover()}
+                className={`relative rounded-2xl border border-white/10 bg-[#0E121B] p-6 flex flex-col justify-between ${styles.borderHover} hover:bg-[#121624] transition-all duration-300 space-y-5 group shadow-lg hud-box hover:-translate-y-2 hover:scale-[1.01] hover:shadow-[0_15px_35px_rgba(0,0,0,0.6)] animate-shimmer`}
               >
                 {/* Admin Mode Bar on each card */}
                 {isAdmin && (
@@ -667,9 +698,11 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <div
-                        className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-all duration-300 ${styles.iconBg}`}
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center border transition-all duration-300 ${styles.iconBg} group-hover:scale-105 group-hover:shadow-[0_0_15px_rgba(255,255,255,0.15)]`}
                       >
-                        <IconComponent size={22} />
+                        <div className={getIconAnimClass()}>
+                          <IconComponent size={22} />
+                        </div>
                       </div>
                       <div>
                         <span className={`font-['Orbitron'] text-xs font-bold tracking-widest ${styles.number}`}>

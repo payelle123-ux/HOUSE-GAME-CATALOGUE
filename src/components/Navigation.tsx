@@ -16,6 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { CustomTab, NavTabId } from "../types";
+import { sfx } from "../services/soundEffects";
 
 interface NavigationProps {
   activeTab: NavTabId;
@@ -111,17 +112,21 @@ export const Navigation: React.FC<NavigationProps> = ({
               <button
                 key={tab.id}
                 id={`nav-tab-${tab.id}`}
-                onClick={() => onSelectTab(tab.id)}
-                className={`relative flex flex-shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold transition-all ${
+                onMouseEnter={() => sfx.playHover()}
+                onClick={() => {
+                  sfx.playTabSwitch();
+                  onSelectTab(tab.id);
+                }}
+                className={`group relative flex flex-shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 active:scale-95 cursor-pointer ${
                   isActive
-                    ? "border border-[#FF4438]/50 bg-gradient-to-r from-[#FF4438]/20 to-[#3E9BFF]/10 text-white shadow-[0_0_15px_rgba(255,68,56,0.25)]"
-                    : "border border-white/5 bg-white/[0.02] text-[#7C8798] hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+                    ? "border border-[#FF4438]/60 bg-gradient-to-r from-[#FF4438]/25 to-[#3E9BFF]/15 text-white shadow-[0_0_20px_rgba(255,68,56,0.3)] scale-[1.02]"
+                    : "border border-white/5 bg-white/[0.02] text-[#7C8798] hover:border-[#3E9BFF]/30 hover:bg-white/[0.06] hover:text-white"
                 }`}
               >
                 <Icon
                   size={16}
-                  className={`transition-colors ${
-                    isActive ? tab.color : "text-[#7C8798] group-hover:text-white"
+                  className={`transition-all duration-200 group-hover:scale-110 ${
+                    isActive ? `${tab.color} drop-shadow-[0_0_8px_currentColor]` : "text-[#7C8798] group-hover:text-white"
                   }`}
                 />
                 <div className="flex flex-col text-left">
@@ -129,13 +134,13 @@ export const Navigation: React.FC<NavigationProps> = ({
                 </div>
 
                 {tab.badge !== undefined && (
-                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#FF4438] px-1.5 text-[10px] font-black text-white shadow-[0_0_8px_rgba(255,68,56,0.6)] animate-pulse">
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#FF4438] px-1.5 text-[10px] font-black text-white shadow-[0_0_10px_rgba(255,68,56,0.8)] animate-pulse">
                     {tab.badge}
                   </span>
                 )}
 
                 {isActive && (
-                  <span className="absolute -bottom-2.5 left-1/2 h-[3px] w-8 -translate-x-1/2 rounded-t-full bg-gradient-to-r from-[#FF4438] to-[#3E9BFF] shadow-[0_0_8px_#FF4438]" />
+                  <span className="absolute -bottom-2.5 left-1/2 h-[3.5px] w-10 -translate-x-1/2 rounded-t-full bg-gradient-to-r from-[#FF4438] via-purple-500 to-[#3E9BFF] shadow-[0_0_12px_#FF4438] animate-pulse" />
                 )}
               </button>
             );
@@ -150,16 +155,22 @@ export const Navigation: React.FC<NavigationProps> = ({
               <button
                 key={tab.id}
                 id={`nav-tab-custom-${tab.id}`}
-                onClick={() => onSelectTab(tab.id)}
-                className={`relative flex flex-shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold transition-all ${
+                onMouseEnter={() => sfx.playHover()}
+                onClick={() => {
+                  sfx.playTabSwitch();
+                  onSelectTab(tab.id);
+                }}
+                className={`group relative flex flex-shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 active:scale-95 cursor-pointer ${
                   isActive
-                    ? "border border-[#3E9BFF]/60 bg-gradient-to-r from-[#3E9BFF]/20 to-purple-600/20 text-white shadow-[0_0_15px_rgba(62,155,255,0.3)]"
-                    : "border border-white/5 bg-white/[0.02] text-[#7C8798] hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+                    ? "border border-[#3E9BFF]/70 bg-gradient-to-r from-[#3E9BFF]/25 to-purple-600/25 text-white shadow-[0_0_20px_rgba(62,155,255,0.35)] scale-[1.02]"
+                    : "border border-white/5 bg-white/[0.02] text-[#7C8798] hover:border-[#3E9BFF]/30 hover:bg-white/[0.06] hover:text-white"
                 }`}
               >
                 <Icon
                   size={15}
-                  className={isActive ? "text-[#3E9BFF]" : "text-[#7C8798]"}
+                  className={`transition-all duration-200 group-hover:scale-110 ${
+                    isActive ? "text-[#3E9BFF] drop-shadow-[0_0_8px_#3E9BFF]" : "text-[#7C8798] group-hover:text-white"
+                  }`}
                 />
                 <span>{tab.title}</span>
 
@@ -170,7 +181,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 )}
 
                 {isActive && (
-                  <span className="absolute -bottom-2.5 left-1/2 h-[3px] w-8 -translate-x-1/2 rounded-t-full bg-[#3E9BFF] shadow-[0_0_8px_#3E9BFF]" />
+                  <span className="absolute -bottom-2.5 left-1/2 h-[3.5px] w-10 -translate-x-1/2 rounded-t-full bg-[#3E9BFF] shadow-[0_0_12px_#3E9BFF] animate-pulse" />
                 )}
               </button>
             );

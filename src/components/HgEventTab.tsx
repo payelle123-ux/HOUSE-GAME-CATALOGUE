@@ -27,6 +27,7 @@ import {
   Tag,
   Share2,
 } from "lucide-react";
+import { sfx } from "../services/soundEffects";
 
 interface HgEventTabProps {
   events: HgEventItem[];
@@ -406,7 +407,7 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
           return (
             <div
               key={event.id}
-              className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0E121B] shadow-2xl transition-all duration-300 hover:border-purple-500/40"
+              className="group relative overflow-hidden rounded-3xl border border-white/10 bg-[#0E121B] shadow-2xl transition-all duration-300 hover:border-purple-500/50 hover:shadow-[0_15px_40px_rgba(168,85,247,0.18)] hud-box"
             >
               {/* Top Banner Cover Image */}
               <div className="relative h-48 sm:h-64 w-full overflow-hidden bg-slate-900">
@@ -502,28 +503,30 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                         {/* Flyer Visual if available */}
                         {event.nextEdition.flyerUrl && (
                           <div
-                            onClick={() =>
+                            onClick={() => {
+                              sfx.playClick();
                               setLightboxData({
                                 url: event.nextEdition!.flyerUrl,
                                 title: event.nextEdition!.title || event.title,
                                 editionDate: event.nextEdition!.date,
                                 description: event.nextEdition!.description,
-                              })
-                            }
-                            className="relative h-56 sm:h-64 w-full overflow-hidden bg-slate-900 cursor-pointer group"
+                              });
+                            }}
+                            onMouseEnter={() => sfx.playHover()}
+                            className="group/flyer relative h-56 sm:h-64 w-full overflow-hidden bg-slate-900 cursor-pointer"
                             title="Cliquer pour agrandir le flyer"
                           >
                             <img
                               src={event.nextEdition.flyerUrl}
                               alt={event.nextEdition.title || "Flyer"}
-                              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                              className="w-full h-full object-cover object-center group-hover/flyer:scale-108 transition-transform duration-500"
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#121624] via-transparent to-transparent" />
-                            <div className="absolute bottom-3 right-3 p-2 rounded-xl bg-black/70 text-white opacity-80 group-hover:opacity-100 transition backdrop-blur-sm">
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#121624] via-transparent to-transparent opacity-80 group-hover/flyer:opacity-40 transition-opacity duration-300" />
+                            <div className="absolute bottom-3 right-3 p-2 rounded-xl bg-black/70 text-white opacity-80 group-hover/flyer:opacity-100 group-hover/flyer:scale-110 transition backdrop-blur-sm shadow-md">
                               <ZoomIn size={16} />
                             </div>
                             <div className="absolute top-3 left-3">
-                              <span className="px-2.5 py-1 rounded-lg bg-purple-600/90 text-white font-['JetBrains_Mono'] text-[11px] font-bold">
+                              <span className="px-2.5 py-1 rounded-lg bg-purple-600/90 text-white font-['JetBrains_Mono'] text-[11px] font-bold shadow-[0_0_10px_rgba(168,85,247,0.5)]">
                                 FLYER OFFICIEL
                               </span>
                             </div>
@@ -531,7 +534,7 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                         )}
 
                         <div className="p-5 space-y-4">
-                          <h3 className="font-['Orbitron'] text-lg font-bold text-white leading-snug">
+                          <h3 className="font-['Orbitron'] text-lg font-bold text-white leading-snug group-hover:text-purple-300 transition-colors">
                             {event.nextEdition.title}
                           </h3>
 
@@ -544,31 +547,31 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                           {/* Info Grid (Date, Time, Location, Price) */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 font-['JetBrains_Mono'] text-xs">
                             {event.nextEdition.date && (
-                              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-slate-300">
+                              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-slate-300 transition-colors hover:border-purple-500/30">
                                 <Calendar size={15} className="text-purple-400 shrink-0" />
                                 <span>{event.nextEdition.date}</span>
                               </div>
                             )}
 
                             {event.nextEdition.time && (
-                              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-slate-300">
+                              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-slate-300 transition-colors hover:border-amber-400/30">
                                 <Clock size={15} className="text-amber-400 shrink-0" />
                                 <span>{event.nextEdition.time}</span>
                               </div>
                             )}
 
                             {event.nextEdition.location && (
-                              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-slate-300">
+                              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-slate-300 transition-colors hover:border-[#FF4438]/30">
                                 <MapPin size={15} className="text-[#FF4438] shrink-0" />
                                 <span>{event.nextEdition.location}</span>
                               </div>
                             )}
 
                             {event.nextEdition.entryFee && (
-                              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-slate-300">
+                              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-slate-300 transition-colors hover:border-emerald-500/30">
                                 <Ticket size={15} className="text-emerald-400 shrink-0" />
                                 <span className="font-bold text-emerald-300">
-                                  {event.nextEdition.entryFee}
+                                   {event.nextEdition.entryFee}
                                 </span>
                               </div>
                             )}
@@ -582,13 +585,15 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                             </div>
                           )}
 
-                          {/* Action Button: Réserver ma place */}
+                          {/* Action Button: Réserver ma place with gaming-btn */}
                           <div className="pt-2">
                             <a
                               href={getBookingLink(event)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex w-full items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold font-['Orbitron'] text-xs sm:text-sm shadow-lg shadow-purple-600/30 transition active:scale-98"
+                              onMouseEnter={() => sfx.playHover()}
+                              onClick={() => sfx.playClick()}
+                              className="gaming-btn flex w-full items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold font-['Orbitron'] text-xs sm:text-sm shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_30px_rgba(168,85,247,0.7)] transition active:scale-95 cursor-pointer"
                             >
                               <MessageCircle size={16} />
                               <span>RÉSERVER MA PLACE</span>
@@ -649,22 +654,22 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                                   description: arc.description,
                                 })
                               }
-                              className="group relative overflow-hidden rounded-xl border border-white/10 bg-slate-900 aspect-video shadow-md cursor-pointer"
+                              className="group/arc relative overflow-hidden rounded-xl border border-white/10 bg-slate-900 aspect-video shadow-md cursor-pointer transition-all duration-300 hover:border-amber-400/60 hover:shadow-[0_8px_20px_rgba(251,191,36,0.2)] hover:-translate-y-1"
                               title="Cliquer pour afficher en plein écran"
                             >
                               <img
                                 src={arc.imageUrl}
                                 alt={arc.title}
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                className="w-full h-full object-cover group-hover/arc:scale-110 transition-transform duration-500"
                               />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent opacity-70 group-hover:opacity-100 transition-opacity" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent opacity-70 group-hover/arc:opacity-90 transition-opacity" />
 
-                              <div className="absolute top-2 right-2 p-1 rounded-md bg-black/60 text-white opacity-0 group-hover:opacity-100 transition">
-                                <ZoomIn size={13} />
+                              <div className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/70 text-white opacity-0 group-hover/arc:opacity-100 group-hover/arc:scale-110 transition backdrop-blur-sm">
+                                <ZoomIn size={14} />
                               </div>
 
                               <div className="absolute bottom-2 left-2.5 right-2.5">
-                                <p className="font-['Orbitron'] text-[11px] font-bold text-white truncate">
+                                <p className="font-['Orbitron'] text-[11px] font-bold text-white truncate group-hover/arc:text-amber-300 transition-colors">
                                   {arc.title}
                                 </p>
                                 {arc.editionDate && (

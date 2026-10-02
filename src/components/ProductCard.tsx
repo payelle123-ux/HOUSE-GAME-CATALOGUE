@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { MessageCircle, ShoppingBag, Eye, Pencil, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { Product, ShopInfo } from "../types";
 import { formatPrice, buildWhatsAppProductUrl } from "../services/storage";
+import { sfx } from "../services/soundEffects";
 
 interface ProductCardProps {
   product: Product;
@@ -22,7 +23,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onEdit,
   onDelete,
 }) => {
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
   const whatsappUrl = buildWhatsAppProductUrl(shopInfo.whatsapp || shopInfo.phone, product, shopInfo.currency);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMousePos({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  };
 
   const getBadgeStyle = (badge?: string) => {
     switch (badge) {
@@ -40,17 +51,36 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   };
 
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-lg border border-white/10 bg-[#12151E] shadow-md transition-all duration-300 hover:-translate-y-1 hover:border-[#3E9BFF]/40 hover:shadow-[0_10px_25px_rgba(6,10,20,0.6)]">
+    <div
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => {
+        setIsHovered(true);
+        sfx.playHover();
+      }}
+      onMouseLeave={() => setIsHovered(false)}
+      className="group relative flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#12151E] shadow-md transition-all duration-300 hover:-translate-y-1.5 hover:border-[#3E9BFF]/60 hover:shadow-[0_12px_30px_rgba(62,155,255,0.2)] hud-box"
+    >
+      {/* Dynamic Cursor Spotlight Overlay */}
+      {isHovered && (
+        <div
+          className="pointer-events-none absolute -inset-px z-10 rounded-xl transition-opacity duration-200"
+          style={{
+            background: `radial-gradient(320px circle at ${mousePos.x}px ${mousePos.y}px, rgba(62, 155, 255, 0.12), transparent 75%)`,
+          }}
+        />
+      )}
+
       {/* Corner cyber decorations */}
-      <div className="pointer-events-none absolute top-0 left-0 h-3 w-3 border-t-2 border-l-2 border-[#FF4438] z-10" />
-      <div className="pointer-events-none absolute bottom-0 right-0 h-3 w-3 border-b-2 border-r-2 border-[#3E9BFF] z-10" />
+      <div className="pointer-events-none absolute top-0 left-0 h-3 w-3 border-t-2 border-l-2 border-[#FF4438] z-20" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-3 w-3 border-b-2 border-r-2 border-[#3E9BFF] z-20" />
 
       {/* Admin Actions Overlay Buttons */}
       {isAdmin && (
-        <div className="absolute top-2.5 right-2.5 z-20 flex gap-1.5 rounded-md bg-[#07090E]/90 p-1 backdrop-blur border border-white/15">
+        <div className="absolute top-2.5 right-2.5 z-30 flex gap-1.5 rounded-md bg-[#07090E]/90 p-1 backdrop-blur border border-white/15">
           <button
             onClick={(e) => {
               e.stopPropagation();
+              sfx.playClick();
               onEdit(product);
             }}
             className="flex h-7 w-7 items-center justify-center rounded text-[#7C8798] transition hover:bg-[#3E9BFF]/20 hover:text-[#3E9BFF]"
@@ -61,6 +91,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <button
             onClick={(e) => {
               e.stopPropagation();
+              sfx.playClick();
               onDelete(product);
             }}
             className="flex h-7 w-7 items-center justify-center rounded text-[#7C8798] transition hover:bg-[#FF4438]/20 hover:text-[#FF4438]"
@@ -73,7 +104,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
       {/* Media Box */}
       <div
-        onClick={() => onSelect(product)}
+        onClick={() => {
+          sfx.playClick();
+          onSelect(product);
+        }}
         className="relative aspect-square w-full cursor-pointer overflow-hidden bg-[#181C28]"
       >
         {product.image ? (
@@ -81,7 +115,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             src={product.image}
             alt={product.name}
             loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-108"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-4xl text-[#7C8798]/30 font-['Orbitron']">
@@ -90,7 +124,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         )}
 
         {/* Badges on top left */}
-        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
+        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-20">
           {product.badge && (
             <span
               className={`rounded border px-2 py-0.5 font-['JetBrains_Mono'] text-[10px] font-bold tracking-wide uppercase backdrop-blur-md ${getBadgeStyle(
@@ -108,15 +142,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </div>
 
         {/* Quick View overlay on hover */}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:opacity-100">
-          <span className="flex items-center gap-1.5 rounded-full border border-white/20 bg-[#07090E]/80 px-3.5 py-1.5 font-['JetBrains_Mono'] text-xs font-semibold text-white shadow-lg">
-            <Eye size={14} /> Voir le détail
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 backdrop-blur-[2px] transition-all duration-300 group-hover:opacity-100 z-20">
+          <span className="flex items-center gap-1.5 rounded-full border border-white/20 bg-[#07090E]/85 px-3.5 py-1.5 font-['JetBrains_Mono'] text-xs font-semibold text-white shadow-[0_0_15px_rgba(62,155,255,0.3)] transition-transform duration-200 group-hover:scale-105">
+            <Eye size={14} className="text-[#3E9BFF]" /> Voir le détail
           </span>
         </div>
       </div>
 
       {/* Content Body */}
-      <div className="flex flex-1 flex-col p-4">
+      <div className="flex flex-1 flex-col p-4 z-20">
         {/* Category & Availability */}
         <div className="mb-1.5 flex items-center justify-between text-xs">
           <span className="font-['JetBrains_Mono'] text-[11px] font-medium text-[#3E9BFF]">
@@ -137,7 +171,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {/* Name */}
         <h3
-          onClick={() => onSelect(product)}
+          onClick={() => {
+            sfx.playClick();
+            onSelect(product);
+          }}
           className="mb-1.5 cursor-pointer font-['Chakra_Petch'] text-base font-semibold text-white transition hover:text-[#3E9BFF] line-clamp-1"
           title={product.name}
         >
@@ -152,7 +189,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         {/* Price & Action footer */}
         <div className="mt-auto pt-2 border-t border-white/5">
           <div className="mb-3 flex items-baseline gap-2">
-            <span className="font-['JetBrains_Mono'] text-lg font-bold text-[#FF4438]">
+            <span className="font-['JetBrains_Mono'] text-lg font-bold text-[#FF4438] drop-shadow-[0_0_8px_rgba(255,68,56,0.3)]">
               {formatPrice(product.price, shopInfo.currency)}
             </span>
             {product.originalPrice && Number(product.originalPrice) > Number(product.price) && (
@@ -165,9 +202,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <div className="grid grid-cols-2 gap-2">
             {/* Add to Cart */}
             <button
-              onClick={() => onAddToCart(product)}
+              onClick={() => {
+                sfx.playSuccess();
+                onAddToCart(product);
+              }}
+              onMouseEnter={() => sfx.playHover()}
               disabled={!product.inStock}
-              className="flex items-center justify-center gap-1.5 rounded border border-[#3E9BFF]/30 bg-[#3E9BFF]/10 py-2 font-['JetBrains_Mono'] text-xs font-semibold text-[#3E9BFF] transition hover:border-[#3E9BFF] hover:bg-[#3E9BFF]/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="gaming-btn flex items-center justify-center gap-1.5 rounded-lg border border-[#3E9BFF]/30 bg-[#3E9BFF]/10 py-2 font-['JetBrains_Mono'] text-xs font-semibold text-[#3E9BFF] transition hover:border-[#3E9BFF] hover:bg-[#3E9BFF]/25 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <ShoppingBag size={14} />
               <span>Panier</span>
@@ -178,7 +219,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 rounded border border-emerald-500/30 bg-emerald-500/15 py-2 font-['JetBrains_Mono'] text-xs font-semibold text-emerald-400 transition hover:border-emerald-400 hover:bg-emerald-500/25 active:scale-95 text-center"
+              onMouseEnter={() => sfx.playHover()}
+              onClick={() => sfx.playClick()}
+              className="gaming-btn flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 py-2 font-['JetBrains_Mono'] text-xs font-semibold text-emerald-400 transition hover:border-emerald-400 hover:bg-emerald-500/25 active:scale-95 text-center cursor-pointer"
             >
               <MessageCircle size={14} />
               <span>Commander</span>

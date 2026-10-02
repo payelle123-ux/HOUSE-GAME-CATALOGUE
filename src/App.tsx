@@ -88,6 +88,8 @@ import { CartDrawer } from "./components/CartDrawer";
 import { LoginModal, ProductFormModal, ShopSettingsModal } from "./components/AdminModal";
 import { Footer } from "./components/Footer";
 import { BoutiqueLegalSection } from "./components/BoutiqueLegalSection";
+import { ScrollToTop } from "./components/ScrollToTop";
+import { PageLoader } from "./components/PageLoader";
 
 // Tab Views
 import { HomeTab } from "./components/HomeTab";
@@ -826,6 +828,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#07090E] text-[#D6DCE6] flex flex-col font-['Chakra_Petch']">
+      {/* Gaming Initial Boot Loader Sequence */}
+      <PageLoader />
+
+      {/* Floating Gaming Scroll-to-Top Button */}
+      <ScrollToTop />
+
       {/* Top Header */}
       <Header
         shopInfo={shopInfo}
@@ -861,9 +869,10 @@ export default function App() {
         cartCount={totalCartCount}
       />
 
-      {/* Main Dynamic Tab Body */}
+      {/* Main Dynamic Tab Body with Smooth Tab Switch Transitions */}
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6">
-        {/* TAB 1: ACCUEIL / OVERVIEW */}
+        <div key={activeTab} className="animate-tab-fade">
+          {/* TAB 1: ACCUEIL / OVERVIEW */}
         {activeTab === "home" && (
           <HomeTab
             homeContent={homeContent}
@@ -1138,6 +1147,7 @@ export default function App() {
             onDeleteTab={() => setCustomTabToDelete(currentActiveCustomTab)}
           />
         )}
+        </div>
       </main>
 
       {/* Footer */}
@@ -1466,6 +1476,12 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Floating Scroll To Top with circular progress indicator */}
+      <ScrollToTop />
+
+      {/* Modern Gaming Boot Loader on first session visit */}
+      <PageLoader />
     </div>
   );
 }

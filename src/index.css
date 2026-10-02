@@ -1,1 +1,320 @@
 @import "tailwindcss";
+
+/* ==========================================================================
+   HOUSE GAME - DESIGN SYSTEM & GAMING MICRO-INTERACTIONS
+   ========================================================================== */
+
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Gaming Scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #07090e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e2638;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3e9bff;
+}
+
+/* ==========================================================================
+   KEYFRAME ANIMATIONS
+   ========================================================================== */
+
+/* Tab Entrance Fade & Rise */
+@keyframes tabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Ambient Cyber Breathing */
+@keyframes cyberGlow {
+  0%, 100% {
+    opacity: 0.35;
+    filter: drop-shadow(0 0 15px rgba(62, 155, 255, 0.25));
+  }
+  50% {
+    opacity: 0.65;
+    filter: drop-shadow(0 0 25px rgba(255, 68, 56, 0.35));
+  }
+}
+
+/* Sleek Diagonal Shimmer Sweep */
+@keyframes shimmerSweep {
+  0% {
+    transform: translateX(-100%) rotate(25deg);
+  }
+  100% {
+    transform: translateX(200%) rotate(25deg);
+  }
+}
+
+/* Floating Micro-particles */
+@keyframes particleFloat {
+  0% {
+    transform: translateY(0px) translateX(0px);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translateY(-18px) translateX(8px);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(0px) translateX(0px);
+    opacity: 0.2;
+  }
+}
+
+/* Subtle Holographic Scanline */
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(1000%);
+  }
+}
+
+/* Refined Subtle Glitch Effect (non-intrusive) */
+@keyframes cyberGlitch {
+  0% {
+    transform: translate(0);
+    text-shadow: none;
+  }
+  20% {
+    transform: translate(-1.5px, 0.5px);
+    text-shadow: 1px 0 #ff4438, -1px 0 #3e9bff;
+  }
+  40% {
+    transform: translate(1px, -0.5px);
+    text-shadow: -1px 0 #ff4438, 1px 0 #3e9bff;
+  }
+  60% {
+    transform: translate(-0.5px, 0);
+    text-shadow: 0.5px 0 #ff4438, -0.5px 0 #3e9bff;
+  }
+  80% {
+    transform: translate(0.5px, 0.5px);
+    text-shadow: none;
+  }
+  100% {
+    transform: translate(0);
+    text-shadow: none;
+  }
+}
+
+/* Micro-animations for Category Icons */
+@keyframes wobbleGamepad {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg) scale(1.08); }
+  75% { transform: rotate(8deg) scale(1.08); }
+}
+
+@keyframes pulseVr {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(62, 155, 255, 0)); }
+  50% { transform: scale(1.12); filter: drop-shadow(0 0 8px rgba(62, 155, 255, 0.7)); }
+}
+
+@keyframes bounceTrophy {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px) scale(1.08); }
+}
+
+@keyframes wiggleWrench {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-12deg); }
+  70% { transform: rotate(12deg); }
+}
+
+@keyframes rhythmDance {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-3px) rotate(-6deg) scale(1.06); }
+  50% { transform: translateY(0) rotate(0deg); }
+  75% { transform: translateY(-3px) rotate(6deg) scale(1.06); }
+}
+
+@keyframes waveWifi {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(16, 185, 129, 0)); }
+  50% { transform: scale(1.14); filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.7)); }
+}
+
+@keyframes retroPixel {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(2px, -2px); }
+  50% { transform: translate(-2px, 2px); }
+  75% { transform: translate(2px, 2px); }
+}
+
+@keyframes coworkRise {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px) scale(1.05); }
+}
+
+/* ==========================================================================
+   UTILITY CLASSES
+   ========================================================================== */
+
+.animate-tab-fade {
+  animation: tabFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-shimmer::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    60deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 60%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+.animate-shimmer:hover::after {
+  animation: shimmerSweep 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Cyber Grid Background */
+.cyber-grid-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* HUD Corner Brackets */
+.hud-box {
+  position: relative;
+}
+
+.hud-box::before,
+.hud-box::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.hud-box::before {
+  top: 0;
+  left: 0;
+  border-top: 2px solid rgba(255, 68, 56, 0.6);
+  border-left: 2px solid rgba(255, 68, 56, 0.6);
+}
+
+.hud-box::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 2px solid rgba(62, 155, 255, 0.6);
+  border-right: 2px solid rgba(62, 155, 255, 0.6);
+}
+
+.hud-box:hover::before {
+  border-color: #ff4438;
+  width: 14px;
+  height: 14px;
+}
+
+.hud-box:hover::after {
+  border-color: #3e9bff;
+  width: 14px;
+  height: 14px;
+}
+
+/* Glitch trigger on hover */
+.hover-glitch:hover {
+  animation: cyberGlitch 0.4s ease forwards;
+}
+
+/* Interactive Gaming Button Base */
+.gaming-btn {
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gaming-btn:hover {
+  transform: translateY(-1.5px);
+  filter: brightness(1.1);
+}
+
+.gaming-btn:active {
+  transform: translateY(1px) scale(0.97);
+}
+
+/* Icon Animations when group is hovered */
+.group:hover .icon-wobble {
+  animation: wobbleGamepad 0.5s ease-in-out;
+}
+
+.group:hover .icon-pulse-vr {
+  animation: pulseVr 0.6s ease-in-out;
+}
+
+.group:hover .icon-trophy {
+  animation: bounceTrophy 0.5s ease-in-out;
+}
+
+.group:hover .icon-wrench {
+  animation: wiggleWrench 0.5s ease-in-out;
+}
+
+.group:hover .icon-dance {
+  animation: rhythmDance 0.6s ease-in-out;
+}
+
+.group:hover .icon-wifi {
+  animation: waveWifi 0.6s ease-in-out;
+}
+
+.group:hover .icon-retro {
+  animation: retroPixel 0.4s ease-in-out;
+}
+
+.group:hover .icon-cowork {
+  animation: coworkRise 0.5s ease-in-out;
+}
+
+/* ==========================================================================
+   ACCESSIBILITY: PREFERS-REDUCED-MOTION
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

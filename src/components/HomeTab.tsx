@@ -21,6 +21,10 @@ import {
 import { HomeContent, ShopInfo, NavTabId } from "../types";
 import { OFFICIAL_BANNER_SRC } from "../data/logo";
 import { compressImage } from "../services/storage";
+import { AnimatedCounter } from "./AnimatedCounter";
+import { GamingParticles } from "./GamingParticles";
+import { ScrollReveal } from "./ScrollReveal";
+import { sfx } from "../services/soundEffects";
 
 interface HomeTabProps {
   homeContent: HomeContent;
@@ -47,7 +51,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [bannerTilt, setBannerTilt] = useState({ x: 0, y: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleBannerMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    setBannerTilt({ x: x * 4, y: -y * 4 });
+  };
+
+  const handleBannerMouseLeave = () => {
+    setBannerTilt({ x: 0, y: 0 });
+  };
 
   // Active banner image (falls back to the official House Game banner)
   const currentBanner = homeContent.bannerImage || OFFICIAL_BANNER_SRC;
@@ -159,7 +175,13 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       {/* ========================================================= */}
       <section
         id="official-banner-showcase"
-        className="group relative overflow-hidden rounded-2xl border border-white/15 bg-[#0A0D14] shadow-[0_0_35px_rgba(62,155,255,0.12)] transition-all hover:border-[#3E9BFF]/40"
+        onMouseMove={handleBannerMouseMove}
+        onMouseLeave={handleBannerMouseLeave}
+        style={{
+          transform: `perspective(1000px) rotateY(${bannerTilt.x}deg) rotateX(${bannerTilt.y}deg)`,
+          transition: "transform 0.15s ease-out, border-color 0.3s ease",
+        }}
+        className="group relative overflow-hidden rounded-2xl border border-white/15 bg-[#0A0D14] shadow-[0_0_35px_rgba(62,155,255,0.12)] transition-all hover:border-[#3E9BFF]/60 hover:shadow-[0_0_50px_rgba(62,155,255,0.25)] hud-box"
       >
         {/* Banner Media Container */}
         <div className="relative w-full overflow-hidden bg-black/90 flex items-center justify-center">
@@ -167,7 +189,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             src={currentBanner}
             alt="House Game - Entreprise de Divertissement, Loisirs, Éducation par le jeu vidéo"
             referrerPolicy="no-referrer"
-            className="w-full h-auto object-contain cursor-pointer transition-transform duration-500 group-hover:scale-[1.008]"
+            className="w-full h-auto object-contain cursor-pointer transition-transform duration-500 group-hover:scale-[1.01]"
             onClick={() => setIsLightboxOpen(true)}
             title="Cliquer pour afficher la bannière en haute définition"
           />
@@ -177,7 +199,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             <button
               onClick={() => setIsLightboxOpen(true)}
               id="btn-zoom-banner"
-              className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/70 backdrop-blur-md px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-lg hover:bg-[#3E9BFF] hover:border-[#3E9BFF] transition-all cursor-pointer"
+              className="gaming-btn flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/70 backdrop-blur-md px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-lg hover:bg-[#3E9BFF] hover:border-[#3E9BFF] transition-all cursor-pointer"
               title="Agrandir en plein écran"
             >
               <Maximize2 size={13} />
@@ -191,7 +213,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 setIsBannerModalOpen(true);
               }}
               id="btn-change-banner"
-              className="flex items-center gap-1.5 rounded-lg border border-amber-400/50 bg-black/80 backdrop-blur-md px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-amber-300 shadow-lg hover:bg-amber-500 hover:text-black hover:border-amber-400 transition-all cursor-pointer"
+              className="gaming-btn flex items-center gap-1.5 rounded-lg border border-amber-400/50 bg-black/80 backdrop-blur-md px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-amber-300 shadow-lg hover:bg-amber-500 hover:text-black hover:border-amber-400 transition-all cursor-pointer"
               title="Changer la bannière et synchroniser avec la base de données Firestore"
             >
               <Database size={13} className="text-emerald-400" />
@@ -202,24 +224,27 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       </section>
 
       {/* Hero Section — Court & Impactant */}
-      <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0C0F17] shadow-2xl">
+      <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0C0F17] shadow-2xl hud-box group">
         <div className="absolute inset-0 bg-gradient-to-r from-[#07090E] via-[#07090E]/90 to-transparent z-10" />
+        <div className="pointer-events-none absolute inset-0 cyber-grid-pattern opacity-25 z-10" />
+        <GamingParticles />
+
         <img
           src={
             homeContent.bannerImage ||
             "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1600&q=80"
           }
           alt="House Game Universe"
-          className="absolute inset-0 h-full w-full object-cover object-center opacity-30 mix-blend-luminosity filter saturate-150"
+          className="absolute inset-0 h-full w-full object-cover object-center opacity-30 mix-blend-luminosity filter saturate-150 transition-transform duration-700 group-hover:scale-105"
         />
 
         <div className="relative z-20 max-w-3xl p-6 sm:p-10 lg:p-12 space-y-5">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#FF4438]/40 bg-[#FF4438]/10 px-3 py-1 font-['JetBrains_Mono'] text-xs font-bold text-[#FF4438]">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#FF4438]/40 bg-[#FF4438]/10 px-3.5 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-[#FF4438] shadow-[0_0_15px_rgba(255,68,56,0.25)]">
             <span className="h-2 w-2 rounded-full bg-[#FF4438] animate-pulse" />
             <span>HOUSE GAME • HUB GAMING OFFICIEL</span>
           </div>
 
-          <h1 className="font-['Orbitron'] text-2xl sm:text-4xl lg:text-5xl font-black text-white leading-tight">
+          <h1 className="font-['Orbitron'] text-2xl sm:text-4xl lg:text-5xl font-black text-white leading-tight hover-glitch transition-all cursor-default">
             {homeContent.heroTitle || "L'UNIVERS ULTIME DU GAMING & DE L'ESPORT"}
           </h1>
 
@@ -231,9 +256,13 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           {/* Action CTAs vers les onglets principaux */}
           <div className="flex flex-wrap items-center gap-3 pt-3">
             <button
-              onClick={() => onNavigateTab("shop")}
+              onClick={() => {
+                sfx.playClick();
+                onNavigateTab("shop");
+              }}
+              onMouseEnter={() => sfx.playHover()}
               id="cta-shop-btn"
-              className="flex items-center gap-2 rounded-xl border border-[#FF4438]/60 bg-[#FF4438] px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_20px_rgba(255,68,56,0.4)] transition hover:bg-[#ff6459] active:scale-95"
+              className="gaming-btn flex items-center gap-2 rounded-xl border border-[#FF4438]/60 bg-[#FF4438] px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_20px_rgba(255,68,56,0.4)] transition hover:bg-[#ff6459] hover:shadow-[0_0_30px_rgba(255,68,56,0.6)] active:scale-95 cursor-pointer"
             >
               <ShoppingBag size={16} />
               <span>BOUTIQUE</span>
@@ -241,27 +270,39 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </button>
 
             <button
-              onClick={() => onNavigateTab("events")}
+              onClick={() => {
+                sfx.playClick();
+                onNavigateTab("events");
+              }}
+              onMouseEnter={() => sfx.playHover()}
               id="cta-events-btn"
-              className="flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/15 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-purple-300 transition hover:bg-purple-500/25 active:scale-95"
+              className="gaming-btn flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/15 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-purple-300 transition hover:bg-purple-500/25 hover:border-purple-400 active:scale-95 cursor-pointer"
             >
               <Trophy size={16} />
               <span>HG EVENT</span>
             </button>
 
             <button
-              onClick={() => onNavigateTab("service")}
+              onClick={() => {
+                sfx.playClick();
+                onNavigateTab("service");
+              }}
+              onMouseEnter={() => sfx.playHover()}
               id="cta-service-btn"
-              className="flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-cyan-300 transition hover:bg-cyan-500/20 active:scale-95"
+              className="gaming-btn flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-cyan-300 transition hover:bg-cyan-500/20 hover:border-cyan-400 active:scale-95 cursor-pointer"
             >
               <Wrench size={16} />
               <span>HG SERVICE</span>
             </button>
 
             <button
-              onClick={() => onNavigateTab("campus")}
+              onClick={() => {
+                sfx.playClick();
+                onNavigateTab("campus");
+              }}
+              onMouseEnter={() => sfx.playHover()}
               id="cta-campus-btn"
-              className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-emerald-300 transition hover:bg-emerald-500/20 active:scale-95"
+              className="gaming-btn flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-emerald-300 transition hover:bg-emerald-500/20 hover:border-emerald-400 active:scale-95 cursor-pointer"
             >
               <Sparkles size={16} />
               <span>HG CAMPUS</span>
@@ -270,23 +311,25 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
       </section>
 
-      {/* Stats Counter Bar */}
+      {/* Stats Counter Bar with AnimatedCounter & ScrollReveal */}
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         {homeContent.stats?.map((stat, idx) => (
-          <div
-            key={idx}
-            className="group relative overflow-hidden rounded-xl border border-white/10 bg-[#0E121B] p-4 sm:p-5 transition hover:border-[#3E9BFF]/40 hover:bg-[#121723]"
-          >
-            <div className="font-['Orbitron'] text-2xl sm:text-3xl font-black text-white group-hover:text-[#3E9BFF] transition-colors">
-              {stat.value}
+          <ScrollReveal key={idx} delay={idx * 80} direction="up">
+            <div
+              onMouseEnter={() => sfx.playHover()}
+              className="group relative overflow-hidden rounded-xl border border-white/10 bg-[#0E121B] p-4 sm:p-5 transition-all duration-300 hover:border-[#3E9BFF]/60 hover:bg-[#121723] hover:-translate-y-1 hover:shadow-[0_8px_25px_rgba(62,155,255,0.2)] hud-box h-full flex flex-col justify-between"
+            >
+              <div className="font-['Orbitron'] text-2xl sm:text-3xl font-black text-white group-hover:text-[#3E9BFF] transition-colors">
+                <AnimatedCounter value={stat.value} />
+              </div>
+              <div className="font-['JetBrains_Mono'] text-xs font-bold text-[#FF4438] mt-1">
+                {stat.label}
+              </div>
+              <div className="text-[11px] text-[#7C8798] mt-0.5 font-['Chakra_Petch']">
+                {stat.desc}
+              </div>
             </div>
-            <div className="font-['JetBrains_Mono'] text-xs font-bold text-[#FF4438] mt-1">
-              {stat.label}
-            </div>
-            <div className="text-[11px] text-[#7C8798] mt-0.5 font-['Chakra_Petch']">
-              {stat.desc}
-            </div>
-          </div>
+          </ScrollReveal>
         ))}
       </section>
 

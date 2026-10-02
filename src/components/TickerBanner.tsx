@@ -13,7 +13,9 @@ import {
   Trash2,
   Edit2,
   X,
+  Radio,
 } from "lucide-react";
+import { sfx } from "../services/soundEffects";
 
 interface TickerBannerProps {
   items: TickerItem[];
@@ -92,23 +94,35 @@ export const TickerBanner: React.FC<TickerBannerProps> = ({
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
           </span>
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 font-semibold uppercase tracking-wider text-[11px]">
-            <Megaphone className="w-3.5 h-3.5 text-amber-400" />
+            <Megaphone className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
             <span>FLASH INFO</span>
+            {/* Live equalizer visualizer */}
+            <div className="flex items-end gap-[2px] h-2.5 ml-1">
+              <span className="w-[2px] h-full bg-amber-400 rounded-full animate-[pulse_0.7s_ease-in-out_infinite]" />
+              <span className="w-[2px] h-2/3 bg-amber-400 rounded-full animate-[pulse_0.5s_ease-in-out_infinite_0.15s]" />
+              <span className="w-[2px] h-4/5 bg-amber-400 rounded-full animate-[pulse_0.9s_ease-in-out_infinite_0.3s]" />
+            </div>
           </div>
         </div>
 
         {/* Central Display / Content */}
         <div
           className="flex-1 overflow-hidden min-w-0 flex items-center justify-center cursor-pointer"
-          onClick={() => currentItem.linkTab && onNavigateTab(currentItem.linkTab)}
-          onMouseEnter={() => setIsPaused(true)}
+          onClick={() => {
+            sfx.playClick();
+            if (currentItem.linkTab) onNavigateTab(currentItem.linkTab);
+          }}
+          onMouseEnter={() => {
+            sfx.playHover();
+            setIsPaused(true);
+          }}
           onMouseLeave={() => setIsPaused(false)}
         >
           <div className="flex items-center gap-2 sm:gap-3 text-center truncate group">
             <span
-              className={`shrink-0 px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold uppercase tracking-wider border ${
+              className={`shrink-0 px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all ${
                 currentItem.highlight
-                  ? "bg-rose-500/20 border-rose-500/50 text-rose-300 animate-pulse"
+                  ? "bg-rose-500/20 border-rose-500/50 text-rose-300 shadow-[0_0_8px_rgba(244,63,94,0.4)] animate-pulse"
                   : "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
               }`}
             >
@@ -120,7 +134,7 @@ export const TickerBanner: React.FC<TickerBannerProps> = ({
             {currentItem.linkTab && (
               <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 group-hover:translate-x-0.5 transition-transform shrink-0">
                 <span>Découvrir</span>
-                <ArrowRight className="w-3 h-3" />
+                <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
               </span>
             )}
           </div>
@@ -129,23 +143,35 @@ export const TickerBanner: React.FC<TickerBannerProps> = ({
         {/* Right Controls */}
         <div className="flex items-center gap-1 shrink-0">
           <button
-            onClick={handlePrev}
+            onClick={() => {
+              sfx.playClick();
+              handlePrev();
+            }}
+            onMouseEnter={() => sfx.playHover()}
             title="Message précédent"
-            className="p-1 rounded hover:bg-slate-700/60 text-slate-400 hover:text-white transition-colors"
+            className="p-1 rounded hover:bg-slate-700/60 text-slate-400 hover:text-white transition-all active:scale-90"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setIsPaused(!isPaused)}
+            onClick={() => {
+              sfx.playClick();
+              setIsPaused(!isPaused);
+            }}
+            onMouseEnter={() => sfx.playHover()}
             title={isPaused ? "Reprendre le défilement" : "Mettre en pause"}
-            className="p-1 rounded hover:bg-slate-700/60 text-slate-400 hover:text-white transition-colors"
+            className="p-1 rounded hover:bg-slate-700/60 text-slate-400 hover:text-white transition-all active:scale-90"
           >
             {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
           </button>
           <button
-            onClick={handleNext}
+            onClick={() => {
+              sfx.playClick();
+              handleNext();
+            }}
+            onMouseEnter={() => sfx.playHover()}
             title="Message suivant"
-            className="p-1 rounded hover:bg-slate-700/60 text-slate-400 hover:text-white transition-colors"
+            className="p-1 rounded hover:bg-slate-700/60 text-slate-400 hover:text-white transition-all active:scale-90"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
