@@ -11,6 +11,8 @@ import {
   HgEventItem,
   CampusModule,
   CampusInfo,
+  ActivityItem,
+  ActivitiesBannerInfo,
 } from "../types";
 import { INITIAL_PRODUCTS } from "../data/initialData";
 import { DEFAULT_INFO } from "../data/logo";
@@ -23,6 +25,8 @@ import {
   INITIAL_TICKER_ITEMS,
   INITIAL_CAMPUS_MODULES,
   INITIAL_CAMPUS_INFO,
+  INITIAL_ACTIVITIES,
+  DEFAULT_ACTIVITIES_BANNER,
 } from "../data/tabData";
 
 const PRODUCTS_KEY = "hg_products_v3";
@@ -37,6 +41,8 @@ const HG_EVENTS_KEY = "hg_hgevents_v3";
 const TICKER_KEY = "hg_ticker_v3";
 const CAMPUS_MODULES_KEY = "hg_campus_modules_v3";
 const CAMPUS_INFO_KEY = "hg_campus_info_v3";
+const ACTIVITIES_KEY = "hg_activities_v3";
+const ACTIVITIES_BANNER_KEY = "hg_activities_banner_v3";
 
 export function loadProducts(): Product[] {
   try {
@@ -498,3 +504,61 @@ export function buildWhatsAppEventRsvpUrl(
 
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
 }
+
+export function loadActivities(): ActivityItem[] {
+  try {
+    const raw = localStorage.getItem(ACTIVITIES_KEY);
+    if (!raw) {
+      saveActivities(INITIAL_ACTIVITIES);
+      return INITIAL_ACTIVITIES;
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+    return INITIAL_ACTIVITIES;
+  } catch (err) {
+    console.warn("Storage loadActivities fallback:", err);
+    return INITIAL_ACTIVITIES;
+  }
+}
+
+export function saveActivities(activities: ActivityItem[]): boolean {
+  try {
+    localStorage.setItem(ACTIVITIES_KEY, JSON.stringify(activities));
+    return true;
+  } catch (err) {
+    console.error("Storage saveActivities error:", err);
+    return false;
+  }
+}
+
+export function loadActivitiesBanner(): ActivitiesBannerInfo {
+  try {
+    const raw = localStorage.getItem(ACTIVITIES_BANNER_KEY);
+    if (!raw) {
+      saveActivitiesBanner(DEFAULT_ACTIVITIES_BANNER);
+      return DEFAULT_ACTIVITIES_BANNER;
+    }
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && parsed.title) {
+      return { ...DEFAULT_ACTIVITIES_BANNER, ...parsed };
+    }
+    return DEFAULT_ACTIVITIES_BANNER;
+  } catch (err) {
+    console.warn("Storage loadActivitiesBanner fallback:", err);
+    return DEFAULT_ACTIVITIES_BANNER;
+  }
+}
+
+export function saveActivitiesBanner(banner: ActivitiesBannerInfo): boolean {
+  try {
+    localStorage.setItem(ACTIVITIES_BANNER_KEY, JSON.stringify(banner));
+    return true;
+  } catch (err) {
+    console.error("Storage saveActivitiesBanner error:", err);
+    return false;
+  }
+}
+
+

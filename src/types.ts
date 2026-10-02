@@ -71,6 +71,7 @@ export interface EventArchivePhoto {
   title: string;
   imageUrl: string;
   editionDate?: string;
+  description?: string;
 }
 
 export interface HgEventItem {
@@ -78,17 +79,21 @@ export interface HgEventItem {
   title: string;
   slug: "apero-gaming" | "house-game-day" | "hg-challenge" | "question-pour-gameur" | "afro-respawn" | "fashion-week-otaku" | string;
   definition: string;
+  coverImage?: string;
   iconName?: string;
   badge?: string;
+  hasScheduledEvent?: boolean;
   nextEdition?: {
     title: string;
     date: string;
     time: string;
     location: string;
     flyerUrl: string;
-    entryFee: string;
-    description: string;
-    bookingOpen: boolean;
+    entryFee?: string;
+    description?: string;
+    gameOrTheme?: string;
+    bookingOpen?: boolean;
+    bookingUrl?: string;
   };
   archives: EventArchivePhoto[];
   customLink?: {
@@ -214,4 +219,33 @@ export interface CampusInfo {
   partnerDescription: string;
   partnerButtonText: string;
 }
+
+export interface ActivityItem {
+  id: string;
+  orderNumber: number;
+  numberStr: string;
+  title: string;
+  category: string;
+  badge: string;
+  description: string;
+  price?: {
+    label: string;
+    amount: string;
+    period?: string;
+  };
+  complementaryServices?: string[];
+  iconName: string;
+  accentColor: "blue" | "amber" | "emerald" | "purple" | "rose" | "cyan";
+  targetTab?: NavTabId;
+}
+
+export interface ActivitiesBannerInfo {
+  badge: string;
+  title: string;
+  description: string;
+  locationTag: string;
+  countLabel?: string;
+  imageUrl?: string;
+}
+
 

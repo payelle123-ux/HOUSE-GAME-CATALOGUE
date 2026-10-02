@@ -17,6 +17,9 @@ import {
   Tournament,
   CustomTab,
   HomeContent,
+  ActivityItem,
+  ActivitiesBannerInfo,
+  HgEventItem,
 } from "../types";
 import { INITIAL_PRODUCTS } from "../data/initialData";
 import { DEFAULT_INFO } from "../data/logo";
@@ -25,6 +28,9 @@ import {
   INITIAL_REPAIR_SERVICES,
   INITIAL_EVENTS,
   INITIAL_TOURNAMENTS,
+  INITIAL_ACTIVITIES,
+  DEFAULT_ACTIVITIES_BANNER,
+  INITIAL_HG_EVENTS,
 } from "../data/tabData";
 
 export enum OperationType {
@@ -558,3 +564,153 @@ export async function updateBannerImageCloud(bannerImage: string): Promise<void>
     handleFirestoreError(err, OperationType.WRITE, `${HOME_COLL}/${HOME_DOC_ID}`);
   }
 }
+
+// ==================== ACTIVITIES (NOS ACTIVITÉS) ====================
+
+const ACTIVITIES_DOC_ID = "activities_list";
+
+export function subscribeToActivities(
+  onUpdate: (activities: ActivityItem[]) => void,
+  onError?: (error: unknown) => void
+) {
+  const docRef = doc(db, HOME_COLL, ACTIVITIES_DOC_ID);
+
+  return onSnapshot(
+    docRef,
+    (docSnap) => {
+      if (!docSnap.exists()) {
+        saveActivitiesCloud(INITIAL_ACTIVITIES).catch(console.error);
+        onUpdate(INITIAL_ACTIVITIES);
+        return;
+      }
+      const data = docSnap.data();
+      if (data && Array.isArray(data.items) && data.items.length > 0) {
+        onUpdate(data.items as ActivityItem[]);
+      } else {
+        onUpdate(INITIAL_ACTIVITIES);
+      }
+    },
+    (err) => {
+      console.error("Firestore activities subscription error:", err);
+      handleFirestoreError(err, OperationType.GET, `${HOME_COLL}/${ACTIVITIES_DOC_ID}`);
+      if (onError) onError(err);
+    }
+  );
+}
+
+export async function saveActivitiesCloud(activities: ActivityItem[]): Promise<void> {
+  const docRef = doc(db, HOME_COLL, ACTIVITIES_DOC_ID);
+  try {
+    await setDoc(
+      docRef,
+      {
+        items: activities,
+        count: activities.length,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${HOME_COLL}/${ACTIVITIES_DOC_ID}`);
+  }
+}
+
+const ACTIVITIES_BANNER_DOC_ID = "activities_banner";
+
+export function subscribeToActivitiesBanner(
+  onUpdate: (banner: ActivitiesBannerInfo) => void,
+  onError?: (error: unknown) => void
+) {
+  const docRef = doc(db, HOME_COLL, ACTIVITIES_BANNER_DOC_ID);
+
+  return onSnapshot(
+    docRef,
+    (docSnap) => {
+      if (!docSnap.exists()) {
+        saveActivitiesBannerCloud(DEFAULT_ACTIVITIES_BANNER).catch(console.error);
+        onUpdate(DEFAULT_ACTIVITIES_BANNER);
+        return;
+      }
+      const data = docSnap.data() as ActivitiesBannerInfo;
+      if (data && data.title) {
+        onUpdate({ ...DEFAULT_ACTIVITIES_BANNER, ...data });
+      } else {
+        onUpdate(DEFAULT_ACTIVITIES_BANNER);
+      }
+    },
+    (err) => {
+      console.error("Firestore activities banner subscription error:", err);
+      handleFirestoreError(err, OperationType.GET, `${HOME_COLL}/${ACTIVITIES_BANNER_DOC_ID}`);
+      if (onError) onError(err);
+    }
+  );
+}
+
+export async function saveActivitiesBannerCloud(banner: ActivitiesBannerInfo): Promise<void> {
+  const docRef = doc(db, HOME_COLL, ACTIVITIES_BANNER_DOC_ID);
+  try {
+    await setDoc(
+      docRef,
+      {
+        ...banner,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${HOME_COLL}/${ACTIVITIES_BANNER_DOC_ID}`);
+  }
+}
+
+// ==================== HG EVENTS (6 CONCEPTS OFFICIELS) ====================
+
+const HG_EVENTS_DOC_ID = "hg_events_official";
+
+export function subscribeToHgEvents(
+  onUpdate: (events: HgEventItem[]) => void,
+  onError?: (error: unknown) => void
+) {
+  const docRef = doc(db, HOME_COLL, HG_EVENTS_DOC_ID);
+
+  return onSnapshot(
+    docRef,
+    (docSnap) => {
+      if (!docSnap.exists()) {
+        saveHgEventsCloud(INITIAL_HG_EVENTS).catch(console.error);
+        onUpdate(INITIAL_HG_EVENTS);
+        return;
+      }
+      const data = docSnap.data();
+      if (data && Array.isArray(data.items) && data.items.length > 0) {
+        onUpdate(data.items as HgEventItem[]);
+      } else {
+        onUpdate(INITIAL_HG_EVENTS);
+      }
+    },
+    (err) => {
+      console.error("Firestore HG events subscription error:", err);
+      handleFirestoreError(err, OperationType.GET, `${HOME_COLL}/${HG_EVENTS_DOC_ID}`);
+      if (onError) onError(err);
+    }
+  );
+}
+
+export async function saveHgEventsCloud(events: HgEventItem[]): Promise<void> {
+  const docRef = doc(db, HOME_COLL, HG_EVENTS_DOC_ID);
+  try {
+    await setDoc(
+      docRef,
+      {
+        items: events,
+        count: events.length,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${HOME_COLL}/${HG_EVENTS_DOC_ID}`);
+  }
+}
+
+
+

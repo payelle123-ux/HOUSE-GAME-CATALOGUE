@@ -43,5 +43,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // Activities collection
+    match /activities/{activityId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }

@@ -17,6 +17,9 @@ import {
   CustomTab,
   CustomTabItem,
   HomeContent,
+  ActivityItem,
+  ActivitiesBannerInfo,
+  HgEventItem,
 } from "./types";
 import {
   loadProducts,
@@ -39,6 +42,10 @@ import {
   saveHgEvents,
   loadTickerItems,
   saveTickerItems,
+  loadActivities,
+  saveActivities,
+  loadActivitiesBanner,
+  saveActivitiesBanner,
 } from "./services/storage";
 import {
   subscribeToProducts,
@@ -62,6 +69,12 @@ import {
   subscribeToHomeContent,
   saveHomeContentCloud,
   updateBannerImageCloud,
+  subscribeToActivities,
+  saveActivitiesCloud,
+  subscribeToActivitiesBanner,
+  saveActivitiesBannerCloud,
+  subscribeToHgEvents,
+  saveHgEventsCloud,
 } from "./services/firebaseService";
 
 // UI Components
@@ -126,6 +139,8 @@ export default function App() {
   const [customTabs, setCustomTabs] = useState<CustomTab[]>(() => loadCustomTabs());
   const [hgEvents, setHgEvents] = useState(() => loadHgEvents());
   const [tickerItems, setTickerItems] = useState(() => loadTickerItems());
+  const [activities, setActivities] = useState<ActivityItem[]>(() => loadActivities());
+  const [activitiesBanner, setActivitiesBanner] = useState<ActivitiesBannerInfo>(() => loadActivitiesBanner());
 
   // Shop Filters & Search
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -224,6 +239,36 @@ export default function App() {
       (err) => console.warn("Home content sync err:", err)
     );
 
+    const unsubActivities = subscribeToActivities(
+      (live) => {
+        if (live && live.length > 0) {
+          setActivities(live);
+          saveActivities(live);
+        }
+      },
+      (err) => console.warn("Activities sync err:", err)
+    );
+
+    const unsubActivitiesBanner = subscribeToActivitiesBanner(
+      (live) => {
+        if (live && live.title) {
+          setActivitiesBanner(live);
+          saveActivitiesBanner(live);
+        }
+      },
+      (err) => console.warn("Activities banner sync err:", err)
+    );
+
+    const unsubHgEvents = subscribeToHgEvents(
+      (live) => {
+        if (live && live.length > 0) {
+          setHgEvents(live);
+          saveHgEvents(live);
+        }
+      },
+      (err) => console.warn("HG events sync err:", err)
+    );
+
     return () => {
       unsubProducts();
       unsubInfo();
@@ -232,6 +277,9 @@ export default function App() {
       unsubTournaments();
       unsubCustomTabs();
       unsubHome();
+      unsubActivities();
+      unsubActivitiesBanner();
+      unsubHgEvents();
     };
   }, []);
 
@@ -693,6 +741,36 @@ export default function App() {
     setItemToDelete(null);
   };
 
+  const handleUpdateActivities = async (updated: ActivityItem[]) => {
+    setActivities(updated);
+    saveActivities(updated);
+    try {
+      await saveActivitiesCloud(updated);
+    } catch (err) {
+      console.error("Cloud activities save error:", err);
+    }
+  };
+
+  const handleUpdateActivitiesBanner = async (updated: ActivitiesBannerInfo) => {
+    setActivitiesBanner(updated);
+    saveActivitiesBanner(updated);
+    try {
+      await saveActivitiesBannerCloud(updated);
+    } catch (err) {
+      console.error("Cloud activities banner save error:", err);
+    }
+  };
+
+  const handleUpdateHgEvents = async (updated: HgEventItem[]) => {
+    setHgEvents(updated);
+    saveHgEvents(updated);
+    try {
+      await saveHgEventsCloud(updated);
+    } catch (err) {
+      console.error("Cloud HG events save error:", err);
+    }
+  };
+
   // Categories list for Shop (following requested order)
   const categories = useMemo(() => {
     const fromProducts = Array.from(
@@ -972,6 +1050,11 @@ export default function App() {
             homeContent={homeContent}
             shopInfo={shopInfo}
             isAdmin={isAdmin}
+            activities={activities}
+            onUpdateActivities={handleUpdateActivities}
+            activitiesBanner={activitiesBanner}
+            onUpdateActivitiesBanner={handleUpdateActivitiesBanner}
+            onOpenLogin={() => setIsLoginOpen(true)}
             onNavigateTab={(tabId) => setActiveTab(tabId)}
           />
         )}
@@ -982,10 +1065,8 @@ export default function App() {
             events={hgEvents}
             shopInfo={shopInfo}
             isAdmin={isAdmin}
-            onUpdateEvents={(updated) => {
-              setHgEvents(updated);
-              saveHgEvents(updated);
-            }}
+            onUpdateEvents={handleUpdateHgEvents}
+            onOpenLogin={() => setIsLoginOpen(true)}
           />
         )}
 

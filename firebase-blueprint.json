@@ -132,6 +132,40 @@
         "bannerImage": { "type": "string" }
       },
       "required": ["heroTitle"]
+    },
+    "ActivityItem": {
+      "title": "ActivityItem",
+      "description": "Official House Game activities and services",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "number" },
+        "numberStr": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "badge": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "object" },
+        "complementaryServices": { "type": "array", "items": { "type": "string" } },
+        "iconName": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "targetTab": { "type": "string" }
+      },
+      "required": ["id", "title", "description", "category"]
+    },
+    "ActivitiesBannerInfo": {
+      "title": "ActivitiesBannerInfo",
+      "description": "Customizable banner information for the Nos Activites tab",
+      "type": "object",
+      "properties": {
+        "badge": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "locationTag": { "type": "string" },
+        "countLabel": { "type": "string" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["title"]
     }
   },
   "firestore": {
@@ -162,6 +196,10 @@
     "/home_content/{contentId}": {
       "entity": "HomeContent",
       "description": "Overview page dynamic content"
+    },
+    "/activities/{activityId}": {
+      "entity": "ActivityItem",
+      "description": "Activities items list"
     }
   }
 }
