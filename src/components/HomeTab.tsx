@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Loader2,
   Image as ImageIcon,
+  Bot,
 } from "lucide-react";
 import { HomeContent, ShopInfo, NavTabId } from "../types";
 import { OFFICIAL_BANNER_SRC } from "../data/logo";
@@ -306,6 +307,20 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             >
               <Sparkles size={16} />
               <span>HG CAMPUS</span>
+            </button>
+
+            {/* AI Companion Quick Trigger */}
+            <button
+              onClick={() => {
+                sfx.playClick();
+                window.dispatchEvent(new CustomEvent("open-hg-ai"));
+              }}
+              onMouseEnter={() => sfx.playHover()}
+              id="cta-ai-master-btn"
+              className="gaming-btn flex items-center gap-2 rounded-xl border border-cyan-400/60 bg-cyan-500/15 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-cyan-200 transition hover:bg-cyan-500/25 hover:border-cyan-300 hover:shadow-[0_0_20px_rgba(0,240,255,0.4)] active:scale-95 cursor-pointer"
+            >
+              <Bot size={16} className="text-cyan-400 animate-pulse" />
+              <span>IA GAME MASTER</span>
             </button>
           </div>
         </div>

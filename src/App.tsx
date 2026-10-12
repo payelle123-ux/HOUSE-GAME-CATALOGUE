@@ -101,6 +101,7 @@ import { RepairTab } from "./components/RepairTab";
 import { EventsTab } from "./components/EventsTab";
 import { EsportTab } from "./components/EsportTab";
 import { CustomTabContent } from "./components/CustomTabContent";
+import { AiGameMaster } from "./components/AiGameMaster";
 
 // Extended Admin Modals
 import {
@@ -1482,6 +1483,16 @@ export default function App() {
 
       {/* Modern Gaming Boot Loader on first session visit */}
       <PageLoader />
+
+      {/* Interactive AI Game Master Companion */}
+      <AiGameMaster
+        currentTab={activeTab}
+        onNavigateTab={(tabId) => {
+          setActiveTab(tabId);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        shopInfo={shopInfo}
+      />
     </div>
   );
 }

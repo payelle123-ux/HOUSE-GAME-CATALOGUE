@@ -1,5 +1,5 @@
 import React from "react";
-import { Lock, LogOut, ShoppingBag, ShieldCheck, MessageCircle, Radio } from "lucide-react";
+import { Lock, LogOut, ShoppingBag, ShieldCheck, MessageCircle, Radio, Bot } from "lucide-react";
 import { ShopInfo } from "../types";
 import { Logo } from "./Logo";
 import { SoundToggle } from "./SoundToggle";
@@ -42,6 +42,21 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Quick actions on the right */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* AI Game Master Quick Launcher */}
+          <button
+            onClick={() => {
+              sfx.playClick();
+              window.dispatchEvent(new CustomEvent("open-hg-ai"));
+            }}
+            onMouseEnter={() => sfx.playHover()}
+            className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-cyan-300 transition-all hover:border-cyan-400 hover:bg-cyan-500/20 hover:shadow-[0_0_12px_rgba(0,240,255,0.4)] active:scale-95"
+            title="Ouvrir HG-BOT l'IA Game Master"
+          >
+            <Bot className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
+            <span className="hidden sm:inline">IA GAME MASTER</span>
+            <span className="sm:hidden">IA</span>
+          </button>
+
           {/* Sound FX Toggle */}
           <SoundToggle />
 
