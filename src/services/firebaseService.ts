@@ -702,6 +702,8 @@ export function subscribeToHgEvents(
             coverImage:
               item.coverImage ||
               "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
+            coverFit: item.coverFit || (idx === 0 ? "contain" : undefined),
+            coverHeight: item.coverHeight ? Number(item.coverHeight) : undefined,
             badge: item.badge || "HG Event",
             hasScheduledEvent: Boolean(item.hasScheduledEvent),
             archives: Array.isArray(item.archives) ? item.archives : [],

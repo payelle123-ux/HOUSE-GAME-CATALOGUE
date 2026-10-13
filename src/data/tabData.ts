@@ -129,6 +129,8 @@ export const INITIAL_HG_EVENTS: HgEventItem[] = [
     badge: "Convivialité & Gaming",
     coverImage:
       "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
+    coverFit: "contain",
+    coverHeight: 200,
     definition:
       "L'APÉRO GAMING est un rendez-vous convivial autour du gaming, permettant aux passionnés de jeux vidéo de se retrouver, jouer, échanger et passer un moment agréable dans l'univers HOUSE GAME.",
     iconName: "GlassWater",

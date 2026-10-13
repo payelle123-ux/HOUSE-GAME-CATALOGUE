@@ -28,6 +28,8 @@ import {
   Share2,
   Upload,
   Loader2,
+  Sliders,
+  Maximize2,
 } from "lucide-react";
 import { sfx } from "../services/soundEffects";
 import { compressImage } from "../services/storage";
@@ -81,6 +83,8 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
   const [formBadge, setFormBadge] = useState("");
   const [formDefinition, setFormDefinition] = useState("");
   const [formCoverImage, setFormCoverImage] = useState("");
+  const [formCoverFit, setFormCoverFit] = useState<"cover" | "contain">("contain");
+  const [formCoverHeight, setFormCoverHeight] = useState<number>(180);
   const [formHasScheduled, setFormHasScheduled] = useState(false);
   const [formNextTitle, setFormNextTitle] = useState("");
   const [formNextDate, setFormNextDate] = useState("");
@@ -125,6 +129,9 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
     setFormBadge(event.badge || "");
     setFormDefinition(event.definition || "");
     setFormCoverImage(event.coverImage || "");
+    const initialFit = event.coverFit || (event.slug === "apero-gaming" || event.id === "hge-1" ? "contain" : "cover");
+    setFormCoverFit(initialFit);
+    setFormCoverHeight(event.coverHeight || (initialFit === "contain" ? 180 : 240));
     setFormHasScheduled(Boolean(event.hasScheduledEvent));
     setFormNextTitle(event.nextEdition?.title || "");
     setFormNextDate(event.nextEdition?.date || "");
@@ -149,6 +156,8 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
     setFormBadge("Nouveau Concept");
     setFormDefinition("");
     setFormCoverImage("");
+    setFormCoverFit("contain");
+    setFormCoverHeight(180);
     setFormHasScheduled(false);
     setFormNextTitle("");
     setFormNextDate("");
@@ -286,6 +295,8 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
         coverImage:
           formCoverImage.trim() ||
           "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
+        coverFit: formCoverFit,
+        coverHeight: formCoverHeight,
         definition: formDefinition.trim(),
         hasScheduledEvent: Boolean(formHasScheduled),
         archives: Array.isArray(formArchives) ? formArchives : [],
@@ -311,6 +322,8 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
               formCoverImage.trim() ||
               ev.coverImage ||
               "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
+            coverFit: formCoverFit,
+            coverHeight: formCoverHeight,
             definition: formDefinition.trim(),
             hasScheduledEvent: Boolean(formHasScheduled),
             archives: Array.isArray(formArchives) ? formArchives : [],
@@ -507,27 +520,66 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
               event.nextEdition &&
               (event.nextEdition.date || event.nextEdition.flyerUrl || event.nextEdition.title)
           );
+          const isContain =
+            event.coverFit === "contain" ||
+            (index === 0 && event.coverFit !== "cover");
+          const customHeight = event.coverHeight
+            ? Math.max(100, Math.min(420, event.coverHeight))
+            : isContain
+            ? 180
+            : null;
+          const bannerImageSrc =
+            event.coverImage ||
+            event.nextEdition?.flyerUrl ||
+            "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80";
 
           return (
             <div
               key={event.id}
               className="group relative overflow-hidden rounded-3xl border border-white/10 bg-[#0E121B] shadow-2xl transition-all duration-300 hover:border-purple-500/50 hover:shadow-[0_15px_40px_rgba(168,85,247,0.18)] hud-box"
             >
-              {/* Top Banner Cover Image */}
-              <div className="relative h-48 sm:h-64 w-full overflow-hidden bg-slate-900">
-                <img
-                  src={
-                    event.coverImage ||
-                    event.nextEdition?.flyerUrl ||
-                    "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80"
-                  }
-                  alt={event.title || "Événement House Game"}
-                  className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0E121B] via-[#0E121B]/60 to-black/30" />
+              {/* Top Banner Cover Image / Centered Resized Logo */}
+              <div
+                style={customHeight ? { height: `${customHeight}px` } : undefined}
+                className={`relative w-full overflow-hidden transition-all duration-300 ${
+                  customHeight ? "" : "h-48 sm:h-64"
+                } ${isContain ? "bg-[#090C13] flex items-center justify-center border-b border-white/5" : "bg-slate-900"}`}
+              >
+                {isContain ? (
+                  <>
+                    {/* Ambient Blurred Aura */}
+                    <div
+                      className="absolute inset-0 bg-center bg-cover filter blur-2xl opacity-20 scale-125 pointer-events-none"
+                      style={{ backgroundImage: `url(${bannerImageSrc})` }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0E121B] via-transparent to-black/40 pointer-events-none" />
+
+                    {/* Centered contained logo - perfectly proportioned and not oversized */}
+                    <div className="relative z-10 w-full h-full flex items-center justify-center px-6 py-4">
+                      <img
+                        src={bannerImageSrc}
+                        alt={event.title || "Logo Concept House Game"}
+                        style={{
+                          maxHeight: customHeight ? `${Math.round(customHeight * 0.72)}px` : "140px",
+                          maxWidth: "85%",
+                        }}
+                        className="object-contain drop-shadow-[0_10px_25px_rgba(0,0,0,0.85)] group-hover:scale-105 transition-transform duration-500"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <img
+                      src={bannerImageSrc}
+                      alt={event.title || "Événement House Game"}
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0E121B] via-[#0E121B]/60 to-black/30 pointer-events-none" />
+                  </>
+                )}
 
                 {/* Top Badge & Number */}
-                <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
+                <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-auto">
                   <div className="flex items-center gap-2">
                     <span className="px-3 py-1 rounded-full bg-purple-600 text-white font-['Orbitron'] text-xs font-bold shadow-lg">
                       CONCEPT #{index + 1}
@@ -535,6 +587,12 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                     {event.badge && (
                       <span className="px-3 py-1 rounded-full border border-white/20 bg-black/60 text-purple-300 font-['JetBrains_Mono'] text-xs font-semibold backdrop-blur-md">
                         {event.badge}
+                      </span>
+                    )}
+                    {isContain && (
+                      <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-purple-500/30 bg-black/60 text-purple-300 text-[10px] font-['JetBrains_Mono'] backdrop-blur-md">
+                        <Sparkles size={11} className="text-purple-400" />
+                        Logo ajusté ({customHeight || 180}px)
                       </span>
                     )}
                   </div>
@@ -545,9 +603,10 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                       <button
                         onClick={() => handleOpenEdit(event)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-['Orbitron'] text-xs font-bold transition shadow-lg active:scale-95"
+                        title="Modifier les informations ou redimensionner le logo"
                       >
                         <Pencil size={13} />
-                        <span>Modifier l'événement</span>
+                        <span>Modifier / Redimensionner</span>
                       </button>
                       <button
                         onClick={() => setEventToDelete(event)}
@@ -561,8 +620,8 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                 </div>
 
                 {/* Event Name & Short Presentation inside cover banner */}
-                <div className="absolute bottom-4 left-4 right-4 sm:left-8 sm:right-8 space-y-2">
-                  <h2 className="font-['Orbitron'] text-2xl sm:text-3xl font-extrabold text-white tracking-tight drop-shadow-md">
+                <div className="absolute bottom-3 left-4 right-4 sm:left-8 sm:right-8 z-20 space-y-1 pointer-events-none">
+                  <h2 className="font-['Orbitron'] text-2xl sm:text-3xl font-extrabold text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
                     {event.title}
                   </h2>
                 </div>
@@ -1042,36 +1101,211 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                   />
                 </div>
 
-                {/* Image de couverture du concept */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold">
-                      Image / Visuel de couverture du concept
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => coverInputRef.current?.click()}
-                      disabled={isUploadingCover}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-['JetBrains_Mono'] text-purple-400 hover:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-lg border border-purple-500/30 transition disabled:opacity-50"
-                    >
-                      {isUploadingCover ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                      <span>Importer un fichier</span>
-                    </button>
+                {/* Image de couverture ou Logo du concept */}
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold">
+                        Image / Logo de couverture du concept
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => coverInputRef.current?.click()}
+                        disabled={isUploadingCover}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-['JetBrains_Mono'] text-purple-400 hover:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-lg border border-purple-500/30 transition disabled:opacity-50"
+                      >
+                        {isUploadingCover ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                        <span>Importer un fichier</span>
+                      </button>
+                      <input
+                        ref={coverInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleUploadCover}
+                      />
+                    </div>
                     <input
-                      ref={coverInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleUploadCover}
+                      type="text"
+                      value={formCoverImage}
+                      onChange={(e) => setFormCoverImage(e.target.value)}
+                      placeholder="URL https://... ou fichier importé"
+                      className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 font-['Chakra_Petch'] text-sm text-white focus:border-purple-400 focus:outline-none"
                     />
                   </div>
-                  <input
-                    type="text"
-                    value={formCoverImage}
-                    onChange={(e) => setFormCoverImage(e.target.value)}
-                    placeholder="URL https://... ou fichier importé"
-                    className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 font-['Chakra_Petch'] text-sm text-white focus:border-purple-400 focus:outline-none"
-                  />
+
+                  {/* 🎛️ NOUVELLE FONCTION DE REDIMENSIONNEMENT & CADRAGE DU LOGO */}
+                  <div className="rounded-2xl border border-purple-500/30 bg-[#121624] p-4 sm:p-5 space-y-4 shadow-inner">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                      <div className="inline-flex items-center gap-2 text-xs font-['Orbitron'] font-bold text-purple-300">
+                        <Sliders size={15} className="text-purple-400" />
+                        <span>OUTIL DE REDIMENSIONNEMENT DU LOGO / VISUEL</span>
+                      </div>
+                      <span className="text-[11px] font-['JetBrains_Mono'] text-slate-400 font-semibold px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10">
+                        Hauteur : <strong className="text-purple-300">{formCoverHeight}px</strong>
+                      </span>
+                    </div>
+
+                    {/* Mode d'affichage */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold">
+                        Mode d'ajustement du visuel :
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setFormCoverFit("contain")}
+                          className={`flex items-start gap-3 p-3 rounded-xl border text-left transition ${
+                            formCoverFit === "contain"
+                              ? "border-purple-500 bg-purple-500/20 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)] ring-1 ring-purple-400/50"
+                              : "border-white/10 bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10"
+                          }`}
+                        >
+                          <div className={`p-2 rounded-lg mt-0.5 ${formCoverFit === "contain" ? "bg-purple-600 text-white" : "bg-white/5 text-slate-400"}`}>
+                            <Sparkles size={16} />
+                          </div>
+                          <div>
+                            <div className="font-['Orbitron'] text-xs font-bold text-white flex items-center gap-1.5">
+                              <span>Logo centré & ajusté</span>
+                              <span className="px-1.5 py-0.2 rounded bg-purple-600/60 text-[9px] font-['JetBrains_Mono'] font-bold text-purple-200">Recommandé</span>
+                            </div>
+                            <div className="font-['Chakra_Petch'] text-[11px] text-slate-300 mt-1 leading-snug">
+                              Parfait pour les logos : conserve les proportions exactes avec fond d'ambiance et halo gamer, sans être étiré ni géant.
+                            </div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setFormCoverFit("cover")}
+                          className={`flex items-start gap-3 p-3 rounded-xl border text-left transition ${
+                            formCoverFit === "cover"
+                              ? "border-purple-500 bg-purple-500/20 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)] ring-1 ring-purple-400/50"
+                              : "border-white/10 bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10"
+                          }`}
+                        >
+                          <div className={`p-2 rounded-lg mt-0.5 ${formCoverFit === "cover" ? "bg-purple-600 text-white" : "bg-white/5 text-slate-400"}`}>
+                            <ImageIcon size={16} />
+                          </div>
+                          <div>
+                            <div className="font-['Orbitron'] text-xs font-bold text-white">
+                              Bannière étendue (Cover)
+                            </div>
+                            <div className="font-['Chakra_Petch'] text-[11px] text-slate-300 mt-1 leading-snug">
+                              Remplit toute la largeur du conteneur en coupant les bords. Idéal pour de grandes photos panoramiques.
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Curseur et Boutons de taille */}
+                    <div className="space-y-2.5 pt-1">
+                      <div className="flex items-center justify-between text-xs font-['JetBrains_Mono']">
+                        <span className="text-slate-300 font-bold">Régler la hauteur d'affichage :</span>
+                        <span className="text-amber-400 font-bold text-sm bg-amber-400/10 px-2.5 py-0.5 rounded-lg border border-amber-400/20">
+                          {formCoverHeight} px
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] font-['JetBrains_Mono'] text-slate-500">100px</span>
+                        <input
+                          type="range"
+                          min={100}
+                          max={360}
+                          step={10}
+                          value={formCoverHeight}
+                          onChange={(e) => setFormCoverHeight(Number(e.target.value))}
+                          className="w-full accent-purple-500 cursor-pointer h-2 bg-white/10 rounded-lg"
+                        />
+                        <span className="text-[11px] font-['JetBrains_Mono'] text-slate-500">360px</span>
+                      </div>
+
+                      {/* Raccourcis de taille prédéfinis */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <span className="text-[10px] font-['JetBrains_Mono'] text-slate-400">Tailles rapides :</span>
+                        {[
+                          { label: "Compact (130px)", val: 130 },
+                          { label: "Logo Idéal (170px)", val: 170 },
+                          { label: "Moyen (210px)", val: 210 },
+                          { label: "Grand (260px)", val: 260 },
+                        ].map((preset) => (
+                          <button
+                            key={preset.val}
+                            type="button"
+                            onClick={() => setFormCoverHeight(preset.val)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-['JetBrains_Mono'] font-semibold transition ${
+                              formCoverHeight === preset.val
+                                ? "bg-purple-600 text-white border border-purple-400 shadow-sm"
+                                : "bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10"
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormCoverFit("contain");
+                            setFormCoverHeight(170);
+                          }}
+                          className="ml-auto inline-flex items-center gap-1 text-[10px] font-['JetBrains_Mono'] text-purple-400 hover:text-purple-300 transition"
+                          title="Rétablir la taille optimale pour logo"
+                        >
+                          <RotateCcw size={11} />
+                          <span>Réinitialiser Logo</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Aperçu en temps réel immédiat */}
+                    {formCoverImage && (
+                      <div className="space-y-1.5 pt-3 border-t border-white/10">
+                        <div className="text-[11px] font-['JetBrains_Mono'] text-slate-400 font-semibold flex items-center justify-between">
+                          <span className="text-purple-300 font-bold">Aperçu direct du résultat :</span>
+                          <span className="text-emerald-400 text-[10px] font-['JetBrains_Mono'] flex items-center gap-1">
+                            <CheckCircle2 size={11} />
+                            Rendu en temps réel ({formCoverHeight}px)
+                          </span>
+                        </div>
+                        <div
+                          style={{ height: `${formCoverHeight}px` }}
+                          className="relative w-full rounded-xl overflow-hidden bg-[#0A0D14] border border-purple-500/40 flex items-center justify-center transition-all duration-200"
+                        >
+                          {formCoverFit === "contain" ? (
+                            <>
+                              <div
+                                className="absolute inset-0 bg-center bg-cover filter blur-2xl opacity-25 scale-125"
+                                style={{ backgroundImage: `url(${formCoverImage})` }}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-[#0E121B] via-transparent to-black/40" />
+                              <img
+                                src={formCoverImage}
+                                alt="Aperçu logo redimensionné"
+                                style={{
+                                  maxHeight: `${Math.round(formCoverHeight * 0.72)}px`,
+                                  maxWidth: "80%",
+                                }}
+                                className="relative z-10 object-contain drop-shadow-[0_10px_25px_rgba(0,0,0,0.85)]"
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <img
+                                src={formCoverImage}
+                                alt="Aperçu bannière couverture"
+                                className="w-full h-full object-cover object-center"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-[#0E121B] via-[#0E121B]/50 to-transparent" />
+                            </>
+                          )}
+                          <div className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded-md bg-black/80 text-purple-300 font-['JetBrains_Mono'] text-[9px] border border-white/10 backdrop-blur-sm">
+                            {formCoverFit === "contain" ? "🎯 Logo centré & proportionné" : "🖼️ Bannière pleine largeur"} • {formCoverHeight}px
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* SECTION PROCHAINS ÉVÉNEMENTS */}

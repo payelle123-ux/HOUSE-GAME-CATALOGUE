@@ -80,6 +80,8 @@ export interface HgEventItem {
   slug: "apero-gaming" | "house-game-day" | "hg-challenge" | "question-pour-gameur" | "afro-respawn" | "fashion-week-otaku" | string;
   definition: string;
   coverImage?: string;
+  coverFit?: "cover" | "contain";
+  coverHeight?: number;
   iconName?: string;
   badge?: string;
   hasScheduledEvent?: boolean;
