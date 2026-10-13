@@ -264,7 +264,7 @@ export default function App() {
 
     const unsubHgEvents = subscribeToHgEvents(
       (live) => {
-        if (live && live.length > 0) {
+        if (Array.isArray(live)) {
           setHgEvents(live);
           saveHgEvents(live);
         }

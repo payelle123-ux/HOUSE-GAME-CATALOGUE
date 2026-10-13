@@ -366,7 +366,8 @@ export function subscribeToEvents(
 
 export async function saveEventCloud(event: GamingEvent): Promise<void> {
   const docRef = doc(db, EVENTS_COLL, event.id);
-  await setDoc(docRef, event, { merge: true });
+  const sanitized = JSON.parse(JSON.stringify(event));
+  await setDoc(docRef, sanitized, { merge: true });
 }
 
 export async function deleteEventCloud(eventId: string): Promise<void> {
@@ -675,21 +676,46 @@ export function subscribeToHgEvents(
   return onSnapshot(
     docRef,
     (docSnap) => {
-      if (!docSnap.exists()) {
-        saveHgEventsCloud(INITIAL_HG_EVENTS).catch(console.error);
-        onUpdate(INITIAL_HG_EVENTS);
-        return;
-      }
-      const data = docSnap.data();
-      if (data && Array.isArray(data.items) && data.items.length > 0) {
-        onUpdate(data.items as HgEventItem[]);
-      } else {
-        onUpdate(INITIAL_HG_EVENTS);
+      try {
+        if (!docSnap.exists()) {
+          saveHgEventsCloud(INITIAL_HG_EVENTS).catch(console.error);
+          onUpdate(INITIAL_HG_EVENTS);
+          return;
+        }
+        const data = docSnap.data();
+        if (data && Array.isArray(data.items)) {
+          const normalized: HgEventItem[] = (data.items as HgEventItem[]).map((item, idx) => ({
+            ...item,
+            id: item.id || `hge-${idx + 1}`,
+            title: item.title || "Événement House Game",
+            slug:
+              item.slug ||
+              (item.title
+                ? item.title
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-|-$/g, "")
+                : `event-${idx + 1}`),
+            definition: item.definition || "",
+            coverImage:
+              item.coverImage ||
+              "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
+            badge: item.badge || "HG Event",
+            hasScheduledEvent: Boolean(item.hasScheduledEvent),
+            archives: Array.isArray(item.archives) ? item.archives : [],
+          }));
+          onUpdate(normalized);
+        } else {
+          onUpdate(INITIAL_HG_EVENTS);
+        }
+      } catch (err) {
+        console.error("Error processing HG events snapshot:", err);
       }
     },
     (err) => {
-      console.error("Firestore HG events subscription error:", err);
-      handleFirestoreError(err, OperationType.GET, `${HOME_COLL}/${HG_EVENTS_DOC_ID}`);
+      console.warn("Firestore HG events subscription notice:", err);
       if (onError) onError(err);
     }
   );
@@ -698,17 +724,19 @@ export function subscribeToHgEvents(
 export async function saveHgEventsCloud(events: HgEventItem[]): Promise<void> {
   const docRef = doc(db, HOME_COLL, HG_EVENTS_DOC_ID);
   try {
+    // Crucial: Clean all undefined keys recursively so Firestore never throws 'Unsupported field value: undefined'
+    const sanitizedItems = JSON.parse(JSON.stringify(events));
     await setDoc(
       docRef,
       {
-        items: events,
+        items: sanitizedItems,
         count: events.length,
         updatedAt: Date.now(),
       },
       { merge: true }
     );
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `${HOME_COLL}/${HG_EVENTS_DOC_ID}`);
+    console.error("Firestore saveHgEventsCloud error:", err);
   }
 }
 

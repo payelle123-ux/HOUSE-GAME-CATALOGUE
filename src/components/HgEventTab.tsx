@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { HgEventItem, ShopInfo, EventArchivePhoto } from "../types";
 import { INITIAL_HG_EVENTS } from "../data/tabData";
 import {
@@ -26,8 +26,11 @@ import {
   Check,
   Tag,
   Share2,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { sfx } from "../services/soundEffects";
+import { compressImage } from "../services/storage";
 
 interface HgEventTabProps {
   events: HgEventItem[];
@@ -62,6 +65,14 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
   const [eventToDelete, setEventToDelete] = useState<HgEventItem | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
 
+  // File upload states & refs
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isUploadingFlyer, setIsUploadingFlyer] = useState(false);
+  const [isUploadingArchive, setIsUploadingArchive] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const flyerInputRef = useRef<HTMLInputElement>(null);
+  const arcInputRef = useRef<HTMLInputElement>(null);
+
   // Rita popup for Fashion Week Otaku when no external URL is set
   const [isRitaModalOpen, setIsRitaModalOpen] = useState(false);
 
@@ -93,6 +104,13 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
   const [formCustomLinkUrl, setFormCustomLinkUrl] = useState("");
   const [formCustomLinkNote, setFormCustomLinkNote] = useState("");
 
+  // Ensure filter is never stuck on an ID that was deleted
+  useEffect(() => {
+    if (selectedFilter !== "all" && !events.some((ev) => ev.id === selectedFilter)) {
+      setSelectedFilter("all");
+    }
+  }, [events, selectedFilter]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -103,9 +121,9 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
   const handleOpenEdit = (event: HgEventItem) => {
     setIsCreatingNew(false);
     setEditingItem(event);
-    setFormTitle(event.title);
+    setFormTitle(event.title || "");
     setFormBadge(event.badge || "");
-    setFormDefinition(event.definition);
+    setFormDefinition(event.definition || "");
     setFormCoverImage(event.coverImage || "");
     setFormHasScheduled(Boolean(event.hasScheduledEvent));
     setFormNextTitle(event.nextEdition?.title || "");
@@ -117,7 +135,7 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
     setFormNextDescription(event.nextEdition?.description || "");
     setFormNextGameOrTheme(event.nextEdition?.gameOrTheme || "");
     setFormNextBookingUrl(event.nextEdition?.bookingUrl || "");
-    setFormArchives(event.archives ? [...event.archives] : []);
+    setFormArchives(Array.isArray(event.archives) ? [...event.archives] : []);
     setFormCustomLinkLabel(event.customLink?.label || "");
     setFormCustomLinkUrl(event.customLink?.url || "");
     setFormCustomLinkNote(event.customLink?.note || "Lien à vérifier avec Rita avant publication");
@@ -148,13 +166,61 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
     setIsEditModalOpen(true);
   };
 
+  const handleUploadCover = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingCover(true);
+      const compressed = await compressImage(file, 1200, 0.8);
+      setFormCoverImage(compressed);
+      showToast("Image de couverture importée avec succès !");
+    } catch (err) {
+      console.error("Upload cover error:", err);
+      showToast("Erreur lors de la compression de l'image.");
+    } finally {
+      setIsUploadingCover(false);
+    }
+  };
+
+  const handleUploadFlyer = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingFlyer(true);
+      const compressed = await compressImage(file, 1200, 0.8);
+      setFormNextFlyerUrl(compressed);
+      showToast("Flyer officiel importé avec succès !");
+    } catch (err) {
+      console.error("Upload flyer error:", err);
+      showToast("Erreur lors de la compression du flyer.");
+    } finally {
+      setIsUploadingFlyer(false);
+    }
+  };
+
+  const handleUploadArchivePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingArchive(true);
+      const compressed = await compressImage(file, 1000, 0.78);
+      setNewArcUrl(compressed);
+      showToast("Photo prête, renseignez le titre puis cliquez sur Ajouter !");
+    } catch (err) {
+      console.error("Upload archive error:", err);
+      showToast("Erreur lors du traitement de la photo.");
+    } finally {
+      setIsUploadingArchive(false);
+    }
+  };
+
   const handleAddArchivePhoto = () => {
     if (!newArcUrl.trim()) {
-      showToast("Veuillez saisir une URL pour la photo.");
+      showToast("Veuillez saisir une URL ou choisir un fichier pour la photo.");
       return;
     }
     const newPhoto: EventArchivePhoto = {
-      id: `arc-${Date.now()}`,
+      id: `arc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       title: newArcTitle.trim() || "Édition précédente",
       imageUrl: newArcUrl.trim(),
       editionDate: newArcDate.trim() || "Édition passée",
@@ -202,41 +268,69 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
           }
         : undefined;
 
+    const cleanSlug =
+      formTitle
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || `event-${Date.now()}`;
+
     if (isCreatingNew) {
       const newItem: HgEventItem = {
         id: `hge-${Date.now()}`,
         title: formTitle.trim(),
-        slug: formTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        slug: cleanSlug,
         badge: formBadge.trim() || "HG Event",
-        coverImage: formCoverImage.trim() || "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
+        coverImage:
+          formCoverImage.trim() ||
+          "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
         definition: formDefinition.trim(),
-        hasScheduledEvent: formHasScheduled,
-        nextEdition: nextEditionData,
-        archives: formArchives,
-        customLink: customLinkData,
+        hasScheduledEvent: Boolean(formHasScheduled),
+        archives: Array.isArray(formArchives) ? formArchives : [],
       };
+      if (formHasScheduled && nextEditionData) {
+        newItem.nextEdition = nextEditionData;
+      }
+      if (customLinkData) {
+        newItem.customLink = customLinkData;
+      }
       const updated = [...events, newItem];
       onUpdateEvents(updated);
-      showToast(`Événement « ${formTitle} » ajouté avec succès !`);
+      showToast(`Événement « ${formTitle.trim()} » ajouté avec succès !`);
     } else if (editingItem) {
       const updated = events.map((ev) => {
         if (ev.id === editingItem.id) {
-          return {
+          const updatedEvent: HgEventItem = {
             ...ev,
             title: formTitle.trim(),
+            slug: ev.slug || cleanSlug,
             badge: formBadge.trim() || "HG Event",
-            coverImage: formCoverImage.trim() || ev.coverImage,
+            coverImage:
+              formCoverImage.trim() ||
+              ev.coverImage ||
+              "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80",
             definition: formDefinition.trim(),
-            hasScheduledEvent: formHasScheduled,
-            nextEdition: nextEditionData,
-            archives: formArchives,
-            customLink: customLinkData,
+            hasScheduledEvent: Boolean(formHasScheduled),
+            archives: Array.isArray(formArchives) ? formArchives : [],
           };
+          if (formHasScheduled && nextEditionData) {
+            updatedEvent.nextEdition = nextEditionData;
+          } else {
+            delete updatedEvent.nextEdition;
+          }
+          if (customLinkData) {
+            updatedEvent.customLink = customLinkData;
+          } else {
+            delete updatedEvent.customLink;
+          }
+          return updatedEvent;
         }
         return ev;
       });
       onUpdateEvents(updated);
-      showToast(`Événement « ${formTitle} » mis à jour avec succès !`);
+      showToast(`Événement « ${formTitle.trim()} » mis à jour avec succès !`);
     }
 
     setIsEditModalOpen(false);
@@ -245,12 +339,16 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
   const handleDeleteEvent = (event: HgEventItem) => {
     const updated = events.filter((ev) => ev.id !== event.id);
     onUpdateEvents(updated);
+    if (selectedFilter === event.id) {
+      setSelectedFilter("all");
+    }
     setEventToDelete(null);
-    showToast(`Événement « ${event.title} » supprimé.`);
+    showToast(`Événement « ${event.title || ""} » supprimé avec succès.`);
   };
 
   const handleResetToDefaults = () => {
     onUpdateEvents(INITIAL_HG_EVENTS);
+    setSelectedFilter("all");
     setIsResetConfirmOpen(false);
     showToast("Les 6 concepts HG ÉVENT officiels ont été rétablis avec succès !");
   };
@@ -401,8 +499,14 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
       {/* Liste des Cartes Événementielles Détaillées */}
       <div className="space-y-12">
         {filteredEvents.map((event, index) => {
-          const isFashionWeek = event.slug.includes("fashion-week-otaku") || event.title.toUpperCase().includes("FASHION WEEK");
-          const hasScheduled = Boolean(event.hasScheduledEvent && event.nextEdition && (event.nextEdition.date || event.nextEdition.flyerUrl || event.nextEdition.title));
+          const isFashionWeek =
+            (event.slug || "").includes("fashion-week-otaku") ||
+            (event.title || "").toUpperCase().includes("FASHION WEEK");
+          const hasScheduled = Boolean(
+            event.hasScheduledEvent &&
+              event.nextEdition &&
+              (event.nextEdition.date || event.nextEdition.flyerUrl || event.nextEdition.title)
+          );
 
           return (
             <div
@@ -417,7 +521,7 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                     event.nextEdition?.flyerUrl ||
                     "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80"
                   }
-                  alt={event.title}
+                  alt={event.title || "Événement House Game"}
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0E121B] via-[#0E121B]/60 to-black/30" />
@@ -435,21 +539,20 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                     )}
                   </div>
 
-                  {/* Admin Direct Edit Button */}
+                  {/* Admin Direct Edit & Delete Buttons */}
                   {isAdmin && (
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleOpenEdit(event)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-['Orbitron'] text-xs font-bold transition shadow-lg"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-['Orbitron'] text-xs font-bold transition shadow-lg active:scale-95"
                       >
                         <Pencil size={13} />
                         <span>Modifier l'événement</span>
                       </button>
                       <button
                         onClick={() => setEventToDelete(event)}
-                        disabled={events.length <= 1}
-                        className="p-1.5 rounded-xl bg-rose-500/80 hover:bg-rose-500 text-white transition disabled:opacity-30"
-                        title="Supprimer"
+                        className="p-1.5 rounded-xl bg-rose-500/80 hover:bg-rose-500 text-white transition active:scale-95 shadow-md"
+                        title="Supprimer cet événement"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -941,14 +1044,32 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
 
                 {/* Image de couverture du concept */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold">
-                    Image / Visuel de couverture du concept (URL)
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold">
+                      Image / Visuel de couverture du concept
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      disabled={isUploadingCover}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-['JetBrains_Mono'] text-purple-400 hover:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-lg border border-purple-500/30 transition disabled:opacity-50"
+                    >
+                      {isUploadingCover ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                      <span>Importer un fichier</span>
+                    </button>
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleUploadCover}
+                    />
+                  </div>
                   <input
-                    type="url"
+                    type="text"
                     value={formCoverImage}
                     onChange={(e) => setFormCoverImage(e.target.value)}
-                    placeholder="https://..."
+                    placeholder="URL https://... ou fichier importé"
                     className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 font-['Chakra_Petch'] text-sm text-white focus:border-purple-400 focus:outline-none"
                   />
                 </div>
@@ -995,14 +1116,32 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-['JetBrains_Mono'] text-slate-400 mb-1">
-                            Flyer officiel (URL)
-                          </label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[11px] font-['JetBrains_Mono'] text-slate-400">
+                              Flyer officiel
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => flyerInputRef.current?.click()}
+                              disabled={isUploadingFlyer}
+                              className="inline-flex items-center gap-1 text-[10px] font-['JetBrains_Mono'] text-purple-400 hover:text-purple-300"
+                            >
+                              {isUploadingFlyer ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                              <span>Uploader flyer</span>
+                            </button>
+                            <input
+                              ref={flyerInputRef}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleUploadFlyer}
+                            />
+                          </div>
                           <input
-                            type="url"
+                            type="text"
                             value={formNextFlyerUrl}
                             onChange={(e) => setFormNextFlyerUrl(e.target.value)}
-                            placeholder="https://...flyer.jpg"
+                            placeholder="URL https://... ou image importée"
                             className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-white focus:border-purple-400 focus:outline-none"
                           />
                         </div>
@@ -1095,10 +1234,10 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                           Lien de réservation personnalisé (laisser vide pour WhatsApp par défaut)
                         </label>
                         <input
-                          type="url"
+                          type="text"
                           value={formNextBookingUrl}
                           onChange={(e) => setFormNextBookingUrl(e.target.value)}
-                          placeholder="https://..."
+                          placeholder="https://... (ou laissez vide)"
                           className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-white focus:border-purple-400 focus:outline-none"
                         />
                       </div>
@@ -1120,7 +1259,7 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                   </div>
 
                   {formArchives.length > 0 && (
-                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                       {formArchives.map((photo) => (
                         <div
                           key={photo.id}
@@ -1138,7 +1277,8 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                           <button
                             type="button"
                             onClick={() => handleRemoveArchivePhoto(photo.id)}
-                            className="p-1.5 text-rose-400 hover:text-white"
+                            className="p-1.5 text-rose-400 hover:text-white rounded-lg hover:bg-rose-500/20 transition"
+                            title="Supprimer cette photo d'archive"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -1148,15 +1288,33 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                   )}
 
                   <div className="p-3 rounded-xl border border-white/10 bg-white/5 space-y-2.5">
-                    <span className="text-[11px] font-['JetBrains_Mono'] text-slate-300 font-bold">
-                      + Ajouter une photo d'archive
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-['JetBrains_Mono'] text-slate-300 font-bold">
+                        + Ajouter une photo d'archive
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => arcInputRef.current?.click()}
+                        disabled={isUploadingArchive}
+                        className="inline-flex items-center gap-1 text-[10px] font-['JetBrains_Mono'] text-amber-400 hover:text-amber-300"
+                      >
+                        {isUploadingArchive ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                        <span>Importer depuis l'appareil</span>
+                      </button>
+                      <input
+                        ref={arcInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleUploadArchivePhoto}
+                      />
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <input
-                        type="url"
+                        type="text"
                         value={newArcUrl}
                         onChange={(e) => setNewArcUrl(e.target.value)}
-                        placeholder="URL de l'image (https://...)"
+                        placeholder="URL de l'image ou fichier importé"
                         className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-white"
                       />
                       <input
@@ -1186,7 +1344,7 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                     <button
                       type="button"
                       onClick={handleAddArchivePhoto}
-                      className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-['JetBrains_Mono'] text-white"
+                      className="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-xs font-['JetBrains_Mono'] font-bold text-white transition active:scale-95"
                     >
                       Ajouter cette photo à la galerie
                     </button>
@@ -1219,7 +1377,7 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                         URL définitive du lien externe (facilement modifiable)
                       </label>
                       <input
-                        type="url"
+                        type="text"
                         value={formCustomLinkUrl}
                         onChange={(e) => setFormCustomLinkUrl(e.target.value)}
                         placeholder="https://... (fourni ultérieurement)"
@@ -1266,28 +1424,36 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
 
       {/* ================= MODAL: SUPPRESSION ================= */}
       {eventToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-rose-500/40 bg-[#0E121B] p-6 space-y-4 shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setEventToDelete(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-rose-500/40 bg-[#0E121B] p-6 space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-3 text-rose-400 font-['Orbitron'] text-base font-bold">
               <AlertTriangle size={22} />
               <span>Supprimer cet événement</span>
             </div>
             <p className="text-sm font-['Chakra_Petch'] text-slate-300">
               Êtes-vous sûr de vouloir supprimer l'événement{" "}
-              <strong className="text-white">« {eventToDelete.title} »</strong> ?
+              <strong className="text-white">« {eventToDelete.title || "Événement"} »</strong> ?
             </p>
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
+                type="button"
                 onClick={() => setEventToDelete(null)}
-                className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-xs font-['JetBrains_Mono'] text-slate-300"
+                className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-xs font-['JetBrains_Mono'] text-slate-300 hover:bg-white/10"
               >
                 Annuler
               </button>
               <button
+                type="button"
                 onClick={() => handleDeleteEvent(eventToDelete)}
-                className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-['Orbitron'] text-xs font-bold transition"
+                className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-['Orbitron'] text-xs font-bold transition shadow-lg shadow-rose-500/20 active:scale-95"
               >
-                Supprimer
+                Supprimer définitivement
               </button>
             </div>
           </div>
