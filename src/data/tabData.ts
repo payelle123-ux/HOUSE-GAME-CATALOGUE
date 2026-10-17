@@ -531,58 +531,7 @@ export const INITIAL_EVENTS: GamingEvent[] = [
   },
 ];
 
-export const INITIAL_TOURNAMENTS: Tournament[] = [
-  {
-    id: "tourn-1",
-    title: "HOUSE GAME CHAMPIONSHIP : EA SPORTS FC 27",
-    game: "EA SPORTS FC 27",
-    cashPrize: "300 000 FCFA",
-    entryFee: "5 000 FCFA / Joueur",
-    date: "Samedi 19 & Dimanche 20 Septembre 2026",
-    time: "À partir de 10h00",
-    location: "Arène Esport House Game - Cameroun",
-    maxSlots: 64,
-    currentSlots: 42,
-    platform: "PlayStation 5 (Moniteurs 144Hz)",
-    format: "1v1 - Phase de poules puis Arbre à Double Élimination (Bo3)",
-    rules: [
-      "Durée mi-temps : 6 minutes",
-      "Vitesse de jeu : Normale",
-      "Équipes autorisées : Clubs uniquement (Pas de All-Star / Soccer Aid)",
-      "Configuration manette : Tactique ou Classique (Assistance standard)",
-      "Retard de plus de 10 min = Forfait direct",
-    ],
-    image:
-      "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1000&q=80",
-    status: "Inscriptions ouvertes",
-    createdAt: Date.now() - 86400000 * 5,
-  },
-  {
-    id: "tourn-2",
-    title: "KING OF IRON FIST CAMEROUN : TEKKEN 8",
-    game: "Tekken 8",
-    cashPrize: "150 000 FCFA",
-    entryFee: "3 000 FCFA / Joueur",
-    date: "Dimanche 27 Septembre 2026",
-    time: "13h00 - 19h00",
-    location: "Salle Esport House Game",
-    maxSlots: 32,
-    currentSlots: 24,
-    platform: "PlayStation 5",
-    format: "1v1 - Arbre à Double Élimination (First to 2 / Top 8 en First to 3)",
-    rules: [
-      "Rounds : 3 rounds gagnants",
-      "Timer : 60 secondes",
-      "Tous les personnages officiels autorisés",
-      "Sélection du stage : Random premier match, puis choix du perdant",
-      "Manettes personnelles et sticks arcade acceptés après vérification",
-    ],
-    image:
-      "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1000&q=80",
-    status: "Inscriptions ouvertes",
-    createdAt: Date.now() - 86400000 * 4,
-  },
-];
+export const INITIAL_TOURNAMENTS: Tournament[] = [];
 
 export const INITIAL_CAMPUS_INFO: CampusInfo = {
   badge: "FORMATION & TRANSMISSION DU SAVOIR",

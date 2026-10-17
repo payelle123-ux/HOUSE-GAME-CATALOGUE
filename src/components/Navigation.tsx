@@ -14,6 +14,8 @@ import {
   Tv,
   Star,
   Users,
+  Swords,
+  Trophy,
 } from "lucide-react";
 import { CustomTab, NavTabId } from "../types";
 import { sfx } from "../services/soundEffects";
@@ -72,6 +74,12 @@ export const Navigation: React.FC<NavigationProps> = ({
       label: "HG SERVICE",
       icon: Wrench,
       color: "text-cyan-400",
+    },
+    {
+      id: "esport",
+      label: "ESPORT",
+      icon: Swords,
+      color: "text-[#00FF88]",
     },
   ];
 

@@ -196,9 +196,9 @@ export function loadTournaments(): Tournament[] {
       return INITIAL_TOURNAMENTS;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_TOURNAMENTS;
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
-    return INITIAL_TOURNAMENTS;
+    return [];
   }
 }
 

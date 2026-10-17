@@ -49,5 +49,41 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // HOUSE GAME ESPORT: Registrations
+    match /registrations/{registrationId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // HOUSE GAME ESPORT: Player Licenses
+    match /player_licenses/{licenseId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // HOUSE GAME ESPORT: Tournament Matches & Brackets
+    match /matches/{matchId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // HOUSE GAME ESPORT: Player Profiles & Stats
+    match /player_profiles/{playerId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // HOUSE GAME ESPORT: Rankings
+    match /rankings/{rankingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // HOUSE GAME ESPORT: Audit logs
+    match /esport_logs/{logId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }

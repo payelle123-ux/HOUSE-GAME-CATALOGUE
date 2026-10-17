@@ -570,6 +570,11 @@ export default function App() {
         format: data.format || "1v1",
         rules: data.rules || [],
         image: data.image || "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&auto=format&fit=crop&q=80",
+        description: data.description || "",
+        gameCategory: data.gameCategory || "",
+        isOfficialLeague: Boolean(data.isOfficialLeague),
+        eligibility: data.eligibility || "",
+        organizer: data.organizer || "House Game Esport",
         status: data.status || "Inscriptions ouvertes",
         createdAt: Date.now(),
       };

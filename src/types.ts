@@ -124,6 +124,7 @@ export interface Tournament {
   id: string;
   title: string;
   game: string;
+  gameCategory?: string;
   cashPrize: string;
   entryFee: string;
   date: string;
@@ -132,11 +133,111 @@ export interface Tournament {
   maxSlots: number;
   currentSlots: number;
   platform: string;
-  format: string;
+  format: "Élimination directe" | "Double élimination" | "Phases de groupes + Finales" | string;
   rules: string[];
   image: string;
-  status: "Inscriptions ouvertes" | "Bientôt disponible" | "Complet" | "Terminé" | string;
+  description?: string;
+  eligibility?: string;
+  status: "Inscriptions ouvertes" | "En cours" | "Bientôt disponible" | "Complet" | "Terminé" | "Suspendu" | string;
+  isOfficialLeague?: boolean;
+  organizer?: string;
   createdAt: number;
+}
+
+export type RegistrationStatus = "en attente" | "validée" | "refusée" | "annulée" | "liste d'attente";
+
+export interface EsportRegistration {
+  id: string; // e.g. "REG-2026-001"
+  tournamentId: string;
+  tournamentTitle: string;
+  playerId: string; // e.g. "HGP-1042"
+  fullName: string;
+  gamerTag: string;
+  phone: string;
+  email?: string;
+  photoUrl?: string;
+  platform: string;
+  game: string;
+  status: RegistrationStatus;
+  paymentConfirmed: boolean;
+  paymentNote?: string;
+  registeredAt: number;
+  validatedAt?: number;
+  licenseId?: string;
+  notes?: string;
+}
+
+export type LicenseStatus = "Active" | "Suspendue" | "Expirée";
+
+export interface EsportLicense {
+  id: string; // e.g. "HGE-2026-8492"
+  playerId: string;
+  gamerTag: string;
+  fullName: string;
+  phoneMasked: string; // e.g. "+237 6** *** 269"
+  photoUrl?: string;
+  qrCodeData: string;
+  issuedAt: string;
+  expiresAt: string;
+  status: LicenseStatus;
+  rankLevel: "Rookie" | "Challenger" | "Pro" | "Élite" | "Master";
+  gameSpecialties: string[];
+  totalPoints: number;
+}
+
+export interface EsportPlayer {
+  id: string;
+  gamerTag: string;
+  fullName: string;
+  phone: string;
+  email?: string;
+  photoUrl?: string;
+  platform: string;
+  favoriteGame: string;
+  rankTitle: "Rookie" | "Challenger" | "Pro" | "Élite" | "Master";
+  points: number;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  trophies: number;
+  licenseId: string;
+  createdAt: number;
+}
+
+export interface EsportMatch {
+  id: string;
+  tournamentId: string;
+  round: number; // 1 = 16ème, 2 = 8ème, 3 = Quarts, 4 = Demis, 5 = Finale
+  roundName: string;
+  matchNumber: number;
+  player1Id?: string;
+  player1Tag: string;
+  player1Score: number;
+  player2Id?: string;
+  player2Tag: string;
+  player2Score: number;
+  winnerId?: string;
+  winnerTag?: string;
+  status: "À venir" | "En cours" | "Terminé" | "Forfait" | "Reporté";
+  isProvisional?: boolean;
+  tableOrScreen?: string;
+  scheduledTime?: string;
+  referee?: string;
+  nextMatchId?: string;
+  updatedAt: number;
+  notes?: string;
+}
+
+export interface EsportAuditLog {
+  id: string;
+  action: string;
+  actor: string;
+  targetId?: string;
+  targetType?: string;
+  oldValue?: string;
+  newValue?: string;
+  details: string;
+  timestamp: number;
 }
 
 export interface CustomTabItem {
@@ -191,6 +292,7 @@ export type NavTabId =
   | "events"
   | "campus"
   | "service"
+  | "esport"
   | string;
 
 export interface TickerItem {

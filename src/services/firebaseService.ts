@@ -400,8 +400,7 @@ export function subscribeToTournaments(
     tournRef,
     async (snapshot) => {
       if (snapshot.empty) {
-        await seedInitialTournaments(INITIAL_TOURNAMENTS);
-        onUpdate(INITIAL_TOURNAMENTS);
+        onUpdate([]);
         return;
       }
 

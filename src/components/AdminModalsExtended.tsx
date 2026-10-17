@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X,
   Upload,
@@ -16,6 +16,9 @@ import {
   Tv,
   Star,
   Users,
+  Image as ImageIcon,
+  Check,
+  FolderOpen,
 } from "lucide-react";
 import {
   HomeContent,
@@ -712,6 +715,50 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
   const [status, setStatus] = useState("Inscriptions ouvertes");
   const [rulesText, setRulesText] = useState("");
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessingImg, setIsProcessingImg] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleFileSelect = async (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Veuillez sélectionner un fichier image (JPG, PNG, WebP).");
+      return;
+    }
+    setIsProcessingImg(true);
+    try {
+      const compressed = await compressImage(file, 1200, 0.82);
+      setImage(compressed);
+    } catch (err) {
+      console.error("Erreur compression image tournoi:", err);
+    } finally {
+      setIsProcessingImg(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
   useEffect(() => {
     if (editingTournament) {
       setTitle(editingTournament.title);
@@ -729,20 +776,20 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
       setStatus(editingTournament.status);
       setRulesText(editingTournament.rules ? editingTournament.rules.join("\n") : "");
     } else {
-      setTitle("HOUSE GAME CHAMPIONSHIP");
+      setTitle("");
       setGame("EA SPORTS FC 27");
-      setCashPrize("250 000 FCFA");
-      setEntryFee("5 000 FCFA");
-      setDate("Samedi 26 Septembre 2026");
+      setCashPrize("");
+      setEntryFee("");
+      setDate("");
       setTime("10h00");
       setLocation("Arène Esport House Game");
-      setMaxSlots(64);
+      setMaxSlots(32);
       setCurrentSlots(0);
       setPlatform("PlayStation 5");
-      setFormat("1v1 Poules + Élimination directe");
-      setImage("https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80");
+      setFormat("Élimination directe");
+      setImage("");
       setStatus("Inscriptions ouvertes");
-      setRulesText("6 minutes par mi-temps\nClubs uniquement\nManettes officielles");
+      setRulesText("");
     }
   }, [editingTournament, isOpen]);
 
@@ -939,14 +986,132 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
             />
           </div>
 
-          <div>
-            <label className="block text-[#A0AEC0] mb-1">Image Bannière (URL) :</label>
+          {/* Image de Bannière / Affiche du Tournoi */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-[#A0AEC0] font-bold">
+                Affiche / Image du Tournoi :
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowUrlInput(!showUrlInput)}
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 underline font-normal"
+              >
+                {showUrlInput ? "Masquer saisie URL" : "Ou renseigner une URL"}
+              </button>
+            </div>
+
+            {/* Hidden file input for local uploads */}
             <input
-              type="url"
-              value={image}
-              onChange={(e) => setImage(e.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-[#141824] px-3 py-2 text-white focus:border-emerald-400 focus:outline-none"
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="hidden"
+              onChange={handleFileInputChange}
             />
+
+            {image ? (
+              /* Image preview card with controls */
+              <div className="relative overflow-hidden rounded-xl border border-emerald-500/40 bg-[#0E131E] p-2.5">
+                <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black/50">
+                  <img
+                    src={image}
+                    alt="Affiche du tournoi"
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5 rounded-full bg-emerald-500/80 px-2.5 py-0.5 text-[10px] font-bold text-black backdrop-blur-sm">
+                    <Check size={12} />
+                    <span>Image prête</span>
+                  </div>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessingImg}
+                    className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 transition disabled:opacity-50"
+                  >
+                    <Upload size={13} />
+                    <span>{isProcessingImg ? "Chargement..." : "Remplacer l'image locale"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setImage("")}
+                    className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition"
+                  >
+                    <Trash2 size={13} />
+                    <span>Supprimer</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Dropzone for local file upload */
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-5 text-center cursor-pointer transition-all ${
+                  isDragging
+                    ? "border-emerald-400 bg-emerald-500/20 scale-[1.01]"
+                    : "border-emerald-500/40 bg-emerald-500/5 hover:border-emerald-400 hover:bg-emerald-500/10"
+                }`}
+              >
+                <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/20 text-emerald-300">
+                  <Upload size={20} />
+                </div>
+                <div className="font-['Orbitron'] text-xs font-bold text-white">
+                  {isProcessingImg ? "Traitement de l'image locale..." : "Ajouter l'image du tournoi localement"}
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Glissez-déposez une image ou cliquez pour parcourir vos fichiers
+                </p>
+                <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 font-bold text-white text-xs shadow-md transition">
+                  <FolderOpen size={13} />
+                  <span>Parcourir mon ordinateur (PNG, JPG, WebP)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Optional URL input fallback */}
+            {showUrlInput && (
+              <div className="pt-1 animate-fadeIn">
+                <input
+                  type="url"
+                  value={image}
+                  onChange={(e) => setImage(e.target.value)}
+                  placeholder="Ou collez une URL d'image (ex: https://...)"
+                  className="w-full rounded-lg border border-white/15 bg-[#141824] px-3 py-2 text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
+                />
+              </div>
+            )}
+
+            {/* Quick gaming visual presets */}
+            <div className="pt-1">
+              <span className="block text-[10px] text-slate-400 mb-1.5">
+                Ou utilisez une suggestion de visuel haute qualité :
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "EA SPORTS FC", url: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&auto=format&fit=crop&q=80" },
+                  { label: "Tekken / Combat", url: "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&auto=format&fit=crop&q=80" },
+                  { label: "Naruto / Anime", url: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop&q=80" },
+                  { label: "Warzone / FPS", url: "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800&auto=format&fit=crop&q=80" },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => setImage(preset.url)}
+                    className="rounded-lg border border-white/10 bg-white/5 hover:border-emerald-400/40 hover:bg-emerald-500/10 px-2.5 py-1 text-[10px] text-slate-300 hover:text-white transition"
+                  >
+                    + {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div>
