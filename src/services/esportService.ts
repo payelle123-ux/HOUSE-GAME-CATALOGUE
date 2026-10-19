@@ -300,6 +300,27 @@ export function clearAllEsportStorage(): void {
   }
 }
 
+// ==================== CROSS-TAB & BROADCAST CHANNEL ====================
+export const ESPORT_BROADCAST_CHANNEL = "hg_esport_channel_v3";
+
+export function broadcastEsportEvent(type: string, payload: unknown): void {
+  try {
+    if (typeof window !== "undefined") {
+      if ("BroadcastChannel" in window) {
+        const bc = new BroadcastChannel(ESPORT_BROADCAST_CHANNEL);
+        bc.postMessage({ type, payload, timestamp: Date.now() });
+        setTimeout(() => {
+          try { bc.close(); } catch { /* ignore */ }
+        }, 300);
+      }
+      window.dispatchEvent(new CustomEvent("hg:esport-event", { detail: { type, payload } }));
+      window.dispatchEvent(new CustomEvent("hg:new-registration", { detail: payload }));
+    }
+  } catch (err) {
+    console.warn("Broadcast error:", err);
+  }
+}
+
 // ==================== FIRESTORE SYNC & SUBSCRIPTIONS ====================
 
 export function subscribeToEsportRegistrations(
@@ -311,22 +332,32 @@ export function subscribeToEsportRegistrations(
     colRef,
     (snapshot) => {
       try {
-        if (!snapshot.empty) {
-          const items: EsportRegistration[] = [];
-          snapshot.forEach((d) => items.push({ ...(d.data() as EsportRegistration), id: d.id }));
-          items.sort((a, b) => (b.registeredAt || 0) - (a.registeredAt || 0));
-          saveEsportRegistrations(items);
-          onUpdate(items);
-        } else {
-          const cached = loadEsportRegistrations();
-          onUpdate(cached);
-        }
+        const cloudItems: EsportRegistration[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as EsportRegistration;
+          cloudItems.push({ ...data, id: d.id });
+        });
+
+        // Smart merge with local storage so no local pending submissions are lost
+        const localItems = loadEsportRegistrations();
+        const map = new Map<string, EsportRegistration>();
+        localItems.forEach((r) => map.set(r.id, r));
+        cloudItems.forEach((r) => map.set(r.id, r));
+
+        const merged = Array.from(map.values());
+        merged.sort((a, b) => (b.registeredAt || 0) - (a.registeredAt || 0));
+
+        saveEsportRegistrations(merged);
+        onUpdate(merged);
       } catch (err) {
+        console.error("Error processing registrations snapshot:", err);
+        const cached = loadEsportRegistrations();
+        onUpdate(cached);
         if (onError) onError(err);
       }
     },
     (err) => {
-      console.warn("Firestore registrations notice:", err);
+      console.warn("Firestore registrations notice (using local cache):", err);
       const cached = loadEsportRegistrations();
       onUpdate(cached);
       if (onError) onError(err);
@@ -341,6 +372,15 @@ export async function saveRegistrationCloud(reg: EsportRegistration): Promise<vo
     await setDoc(docRef, sanitized, { merge: true });
   } catch (err) {
     console.warn("Firestore saveRegistrationCloud fallback to local:", err);
+  }
+}
+
+export async function deleteRegistrationCloud(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, COLL_REGISTRATIONS, id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn("Firestore deleteRegistrationCloud fallback:", err);
   }
 }
 

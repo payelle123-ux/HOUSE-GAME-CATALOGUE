@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Plus,
   ArrowUpDown,
   ShoppingBag,
   Package,
+  Swords,
+  BellRing,
+  X,
 } from "lucide-react";
 import {
   Product,
@@ -20,7 +23,14 @@ import {
   ActivityItem,
   ActivitiesBannerInfo,
   HgEventItem,
+  EsportRegistration,
 } from "./types";
+import {
+  loadEsportRegistrations,
+  saveEsportRegistrations,
+  subscribeToEsportRegistrations,
+} from "./services/esportService";
+import { sfx } from "./services/soundEffects";
 import {
   loadProducts,
   saveProducts,
@@ -201,6 +211,13 @@ export default function App() {
   const [activities, setActivities] = useState<ActivityItem[]>(() => loadActivities());
   const [activitiesBanner, setActivitiesBanner] = useState<ActivitiesBannerInfo>(() => loadActivitiesBanner());
 
+  // Esport Data States & Live Inscriptions Alerts
+  const [esportRegistrations, setEsportRegistrations] = useState<EsportRegistration[]>(() => loadEsportRegistrations());
+  const [esportInitialSubView, setEsportInitialSubView] = useState<"tournaments" | "admin-dash" | "licenses">("tournaments");
+  const [newRegAlert, setNewRegAlert] = useState<EsportRegistration | null>(null);
+  const knownRegIdsRef = useRef<Set<string>>(new Set(loadEsportRegistrations().map((r) => r.id)));
+  const isInitialMountRef = useRef(true);
+
   // Shop Filters & Search
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("Tous");
@@ -328,6 +345,75 @@ export default function App() {
       (err) => console.warn("HG events sync err:", err)
     );
 
+    const unsubEsportRegs = subscribeToEsportRegistrations(
+      (liveRegs) => {
+        if (!isInitialMountRef.current) {
+          const incoming = liveRegs.find((r) => !knownRegIdsRef.current.has(r.id));
+          if (incoming) {
+            sfx.playRegistrationAlert();
+            setNewRegAlert(incoming);
+            if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+              try {
+                new Notification("🎮 Nouvelle Inscription HOUSE GAME ESPORT !", {
+                  body: `${incoming.gamerTag} (${incoming.fullName}) s'est inscrit au tournoi « ${incoming.tournamentTitle} ».`,
+                  icon: "/favicon.ico",
+                });
+              } catch (e) {
+                console.warn("Notification error:", e);
+              }
+            }
+          }
+        } else {
+          isInitialMountRef.current = false;
+        }
+
+        liveRegs.forEach((r) => knownRegIdsRef.current.add(r.id));
+        setEsportRegistrations(liveRegs);
+        saveEsportRegistrations(liveRegs);
+      },
+      (err) => console.warn("Esport registrations sync err:", err)
+    );
+
+    // Instant zero-delay same-browser cross-tab broadcast
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        bc = new BroadcastChannel("hg_esport_channel_v3");
+        bc.onmessage = (event) => {
+          if (event.data?.type === "new-registration" && event.data?.payload) {
+            const incoming = event.data.payload as EsportRegistration;
+            sfx.playRegistrationAlert();
+            setNewRegAlert(incoming);
+            setEsportRegistrations((prev) => {
+              if (prev.some((r) => r.id === incoming.id)) return prev;
+              const updated = [incoming, ...prev];
+              saveEsportRegistrations(updated);
+              return updated;
+            });
+          }
+        };
+      }
+    } catch (e) {
+      console.warn("BroadcastChannel error in App:", e);
+    }
+
+    const handleCustomReg = (e: Event) => {
+      const customEvent = e as CustomEvent<EsportRegistration>;
+      if (customEvent.detail) {
+        const incoming = customEvent.detail;
+        sfx.playRegistrationAlert();
+        setNewRegAlert(incoming);
+        setEsportRegistrations((prev) => {
+          if (prev.some((r) => r.id === incoming.id)) return prev;
+          const updated = [incoming, ...prev];
+          saveEsportRegistrations(updated);
+          return updated;
+        });
+      }
+    };
+
+    window.addEventListener("hg:new-registration", handleCustomReg);
+
     return () => {
       unsubProducts();
       unsubInfo();
@@ -339,6 +425,11 @@ export default function App() {
       unsubActivities();
       unsubActivitiesBanner();
       unsubHgEvents();
+      unsubEsportRegs();
+      if (bc) {
+        try { bc.close(); } catch { /* ignore */ }
+      }
+      window.removeEventListener("hg:new-registration", handleCustomReg);
     };
   }, []);
 
@@ -924,6 +1015,7 @@ export default function App() {
         onSelectTab={(tabId) => setActiveTab(tabId)}
         customTabs={customTabs}
         isAdmin={isAdmin}
+        pendingEsportCount={esportRegistrations.filter((r) => r.status === "en attente").length}
         onOpenCreateTabModal={() => {
           setEditingCustomTab(null);
           setIsCustomTabModalOpen(true);
@@ -1173,8 +1265,15 @@ export default function App() {
             tournaments={tournaments}
             shopInfo={shopInfo}
             isAdmin={isAdmin}
+            registrations={esportRegistrations}
+            onUpdateRegistrations={(regs) => {
+              setEsportRegistrations(regs);
+              saveEsportRegistrations(regs);
+            }}
             targetTournamentId={targetTournamentId}
             onClearTargetTournament={() => setTargetTournamentId(null)}
+            initialSubView={esportInitialSubView}
+            onSubViewChange={(v) => setEsportInitialSubView(v as any)}
             onOpenAddTournament={() => {
               setEditingTournament(null);
               setIsTournamentModalOpen(true);
@@ -1556,6 +1655,46 @@ export default function App() {
         }}
         shopInfo={shopInfo}
       />
+
+      {/* Real-time Notification Alert for New E-Sport Registrations */}
+      {newRegAlert && (
+        <div className="fixed bottom-6 right-6 z-50 flex max-w-md items-center gap-3.5 rounded-2xl border-2 border-emerald-400 bg-[#0E1524] p-4 shadow-[0_10px_35px_rgba(0,255,136,0.4)] backdrop-blur-xl animate-fadeIn">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-inner">
+            <BellRing size={22} className="animate-pulse" />
+          </div>
+          <div className="flex-1 space-y-0.5">
+            <div className="flex items-center gap-1.5 font-['Orbitron'] text-xs font-bold text-emerald-300">
+              <Swords size={12} />
+              <span>NOUVELLE INSCRIPTION EN DIRECT !</span>
+            </div>
+            <p className="font-['Chakra_Petch'] text-xs text-white leading-tight font-semibold">
+              <strong className="text-emerald-400 font-['Orbitron']">{newRegAlert.gamerTag}</strong> vient de s'inscrire à « {newRegAlert.tournamentTitle} ».
+            </p>
+            <p className="font-['JetBrains_Mono'] text-[11px] text-slate-400">
+              Tél : {newRegAlert.phone} • Statut : En attente
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5 shrink-0">
+            <button
+              onClick={() => {
+                setActiveTab("esport");
+                setEsportInitialSubView("admin-dash");
+                setNewRegAlert(null);
+                window.scrollTo({ top: 350, behavior: "smooth" });
+              }}
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-md transition active:scale-95"
+            >
+              Gérer
+            </button>
+            <button
+              onClick={() => setNewRegAlert(null)}
+              className="text-slate-400 hover:text-white text-[11px] font-['JetBrains_Mono'] p-1"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -27,6 +27,7 @@ interface NavigationProps {
   isAdmin: boolean;
   onOpenCreateTabModal: () => void;
   cartCount: number;
+  pendingEsportCount?: number;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -36,6 +37,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   isAdmin,
   onOpenCreateTabModal,
   cartCount,
+  pendingEsportCount,
 }) => {
   const officialTabs = [
     {
@@ -79,6 +81,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       id: "esport",
       label: "ESPORT",
       icon: Swords,
+      badge: pendingEsportCount && pendingEsportCount > 0 ? pendingEsportCount : undefined,
       color: "text-[#00FF88]",
     },
   ];

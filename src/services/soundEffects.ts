@@ -173,6 +173,47 @@ class SoundEngine {
   }
 
   /**
+   * Triumphant chime notification when a player registers for an esport tournament
+   * Audible even in background / tab switch, non-distorted, pleasant cyber chime
+   */
+  public playRegistrationAlert() {
+    if (this.muted) return;
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+
+      const now = this.ctx.currentTime;
+      // 3 ascending harmonic notes: E5 (659.25Hz), G#5 (830.61Hz), B5 (987.77Hz), E6 (1318.5Hz)
+      const notes = [
+        { freq: 659.25, start: now, duration: 0.12 },
+        { freq: 830.61, start: now + 0.1, duration: 0.14 },
+        { freq: 987.77, start: now + 0.22, duration: 0.18 },
+        { freq: 1318.51, start: now + 0.36, duration: 0.35 },
+      ];
+
+      notes.forEach(({ freq, start, duration }) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.08, start);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(start);
+        osc.stop(start + duration);
+      });
+    } catch {
+      // audio context may be locked until user interaction
+    }
+  }
+
+  /**
    * Sound effect on unmuting
    */
   private playChirp() {

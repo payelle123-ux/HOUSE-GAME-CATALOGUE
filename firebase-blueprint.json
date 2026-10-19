@@ -166,6 +166,43 @@
         "imageUrl": { "type": "string" }
       },
       "required": ["title"]
+    },
+    "EsportRegistration": {
+      "title": "EsportRegistration",
+      "description": "Tournament player registration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tournamentId": { "type": "string" },
+        "tournamentTitle": { "type": "string" },
+        "playerId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "gamerTag": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "platform": { "type": "string" },
+        "game": { "type": "string" },
+        "status": { "type": "string" },
+        "paymentConfirmed": { "type": "boolean" },
+        "registeredAt": { "type": "number" }
+      },
+      "required": ["id", "tournamentId", "tournamentTitle", "fullName", "gamerTag", "phone", "status"]
+    },
+    "EsportLicense": {
+      "title": "EsportLicense",
+      "description": "Certified player license ID card",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "playerId": { "type": "string" },
+        "gamerTag": { "type": "string" },
+        "fullName": { "type": "string" },
+        "status": { "type": "string" },
+        "issuedAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["id", "playerId", "gamerTag", "fullName", "status"]
     }
   },
   "firestore": {
@@ -200,6 +237,14 @@
     "/activities/{activityId}": {
       "entity": "ActivityItem",
       "description": "Activities items list"
+    },
+    "/registrations/{registrationId}": {
+      "entity": "EsportRegistration",
+      "description": "Player tournament registrations"
+    },
+    "/player_licenses/{licenseId}": {
+      "entity": "EsportLicense",
+      "description": "Player certified esport licenses"
     }
   }
 }

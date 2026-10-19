@@ -50,6 +50,11 @@ import {
   Upload,
   Share2,
   Copy,
+  Bell,
+  BellRing,
+  RefreshCw,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { EsportDigitalLicenseCard } from "./EsportDigitalLicenseCard";
 import { EsportBracketViewer } from "./EsportBracketViewer";
@@ -60,13 +65,18 @@ import {
   loadEsportRegistrations,
   saveEsportRegistrations,
   saveRegistrationCloud,
+  deleteRegistrationCloud,
+  subscribeToEsportRegistrations,
+  broadcastEsportEvent,
   loadEsportLicenses,
   saveEsportLicenses,
   saveLicenseCloud,
   deleteLicenseCloud,
+  subscribeToEsportLicenses,
   loadEsportMatches,
   saveEsportMatches,
   saveMatchCloud,
+  subscribeToEsportMatches,
   loadEsportPlayers,
   saveEsportPlayers,
   loadEsportLogs,
@@ -96,9 +106,13 @@ interface EsportTabProps {
   isAdmin: boolean;
   targetTournamentId?: string | null;
   onClearTargetTournament?: () => void;
+  initialSubView?: EsportSubView;
+  onSubViewChange?: (view: EsportSubView) => void;
   onOpenAddTournament: () => void;
   onEditTournament: (tournament: Tournament) => void;
   onDeleteTournament: (tournament: Tournament) => void;
+  registrations?: EsportRegistration[];
+  onUpdateRegistrations?: (regs: EsportRegistration[]) => void;
 }
 
 type EsportSubView = "tournaments" | "licenses" | "brackets" | "rankings" | "player-space" | "admin-dash";
@@ -109,9 +123,13 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   isAdmin,
   targetTournamentId,
   onClearTargetTournament,
+  initialSubView,
+  onSubViewChange,
   onOpenAddTournament,
   onEditTournament,
   onDeleteTournament,
+  registrations: propRegistrations,
+  onUpdateRegistrations,
 }) => {
   // Navigation inside Esport Tab
   const [subView, setSubView] = useState<EsportSubView>("tournaments");
@@ -123,9 +141,16 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     return clean;
   });
   const [registrations, setRegistrations] = useState<EsportRegistration[]>(() => {
-    const loaded = loadEsportRegistrations();
-    return loaded.filter((r) => !r.id.startsWith("REG-2026-00"));
+    if (propRegistrations && propRegistrations.length > 0) return propRegistrations;
+    return loadEsportRegistrations();
   });
+
+  // Keep registrations synced if updated from parent
+  useEffect(() => {
+    if (propRegistrations) {
+      setRegistrations(propRegistrations);
+    }
+  }, [propRegistrations]);
   const [licenses, setLicenses] = useState<EsportLicense[]>(() => {
     const loaded = loadEsportLicenses();
     return loaded.filter((l) => !l.id.startsWith("HGE-2026-100"));
@@ -143,10 +168,90 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     return loaded.filter((lg) => !["log-1", "log-2", "log-3"].includes(lg.id));
   });
 
-  // Purge legacy demo data once on mount if any was stored in browser
+  // Set initial subView if provided
   useEffect(() => {
-    clearAllEsportStorage();
-  }, []);
+    if (initialSubView) {
+      setSubView(initialSubView);
+    }
+  }, [initialSubView]);
+
+  // Real-time Firestore Subscriptions & Instant Cross-Tab Sync
+  useEffect(() => {
+    const unsubRegs = subscribeToEsportRegistrations(
+      (liveRegs) => {
+        setRegistrations(liveRegs);
+        saveEsportRegistrations(liveRegs);
+        onUpdateRegistrations?.(liveRegs);
+      },
+      (err) => console.warn("Registrations sync:", err)
+    );
+
+    const unsubLics = subscribeToEsportLicenses(
+      (liveLics) => {
+        setLicenses(liveLics);
+        saveEsportLicenses(liveLics);
+      },
+      (err) => console.warn("Licenses sync:", err)
+    );
+
+    const unsubMatches = subscribeToEsportMatches(
+      (liveMatches) => {
+        setMatches(liveMatches);
+        saveEsportMatches(liveMatches);
+      },
+      (err) => console.warn("Matches sync:", err)
+    );
+
+    // Cross-tab and window event listener for instantaneous local sync
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        bc = new BroadcastChannel("hg_esport_channel_v3");
+        bc.onmessage = (event) => {
+          if (event.data?.type === "new-registration") {
+            const reloaded = loadEsportRegistrations();
+            setRegistrations(reloaded);
+            onUpdateRegistrations?.(reloaded);
+          }
+        };
+      }
+    } catch {
+      // ignore
+    }
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "hg_esport_registrations_v3") {
+        const reloaded = loadEsportRegistrations();
+        setRegistrations(reloaded);
+        onUpdateRegistrations?.(reloaded);
+      }
+      if (e.key === "hg_esport_licenses_v3") {
+        setLicenses(loadEsportLicenses());
+      }
+    };
+
+    const handleCustomReg = () => {
+      const reloaded = loadEsportRegistrations();
+      setRegistrations(reloaded);
+      onUpdateRegistrations?.(reloaded);
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("hg:new-registration", handleCustomReg);
+    window.addEventListener("hg:esport-event", handleCustomReg);
+
+    return () => {
+      unsubRegs();
+      unsubLics();
+      unsubMatches();
+      if (bc) {
+        try { bc.close(); } catch { /* ignore */ }
+      }
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("hg:new-registration", handleCustomReg);
+      window.removeEventListener("hg:esport-event", handleCustomReg);
+    };
+  }, [onUpdateRegistrations]);
 
   // Sync when parent tournaments change
   useEffect(() => {
@@ -181,6 +286,34 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   const [regAcceptedTerms, setRegAcceptedTerms] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
   const [regSuccessMessage, setRegSuccessMessage] = useState<string | null>(null);
+  // Admin registrations management filter & Notification permissions
+  const [adminRegFilter, setAdminRegFilter] = useState<"all" | "en attente" | "validée" | "refusée">("all");
+  const [notificationPermission, setNotificationPermission] = useState<string>(() => {
+    return typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default";
+  });
+
+  const requestNotificationPermission = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      showToast("Les notifications de bureau ne sont pas supportées sur cet appareil.");
+      return;
+    }
+    try {
+      const res = await Notification.requestPermission();
+      setNotificationPermission(res);
+      if (res === "granted") {
+        sfx.playSuccess();
+        showToast("Notifications activées ! Vous serez alerté en direct à chaque inscription.");
+        new Notification("🔔 HOUSE GAME ESPORT", {
+          body: "Alertes d'inscriptions aux tournois activées avec succès !",
+          icon: "/favicon.ico",
+        });
+      } else {
+        showToast("Notifications refusées dans votre navigateur.");
+      }
+    } catch (e) {
+      console.warn("Notification permission error:", e);
+    }
+  };
 
   // Rules Modal State
   const [viewingRulesTournament, setViewingRulesTournament] = useState<Tournament | null>(null);
@@ -473,7 +606,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     const isWaitlist = currentSlots >= maxSlots;
     const initialStatus: RegistrationStatus = isWaitlist ? "liste d'attente" : "en attente";
 
-    const newRegId = `REG-${new Date().getFullYear()}-${String(registrations.length + 1).padStart(3, "0")}`;
+    const newRegId = `REG-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const newPlayerId = generatePlayerId();
 
     const newReg: EsportRegistration = {
@@ -496,7 +629,30 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     const updatedRegs = [newReg, ...registrations];
     setRegistrations(updatedRegs);
     saveEsportRegistrations(updatedRegs);
-    saveRegistrationCloud(newReg);
+    onUpdateRegistrations?.(updatedRegs);
+
+    // Immediate Firestore cloud sync
+    saveRegistrationCloud(newReg).catch((err) => {
+      console.warn("Firestore saveRegistrationCloud notice:", err);
+    });
+
+    // Cross-tab broadcast & event for instantaneous sync across all windows
+    broadcastEsportEvent("new-registration", newReg);
+
+    // Play triumphant registration audio notification
+    sfx.playRegistrationAlert();
+
+    // Native browser push notification if permission granted
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      try {
+        new Notification("🎮 Nouvelle Inscription E-Sport !", {
+          body: `${newReg.gamerTag} (${newReg.fullName}) s'est inscrit au tournoi « ${registeringTournament.title} »`,
+          icon: "/favicon.ico",
+        });
+      } catch (e) {
+        console.warn("Notification error:", e);
+      }
+    }
 
     // Audit log
     const newLog: EsportAuditLog = {
@@ -535,17 +691,24 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   // Admin Validate Registration (Emits License Automatically)
   const handleValidateRegistration = (reg: EsportRegistration) => {
     sfx.playClick();
+    let validatedReg: EsportRegistration | null = null;
     const updatedRegs = registrations.map((r) => {
       if (r.id === reg.id) {
-        return {
+        const v: EsportRegistration = {
           ...r,
           status: "validée" as RegistrationStatus,
           paymentConfirmed: true,
           validatedAt: Date.now(),
         };
+        validatedReg = v;
+        return v;
       }
       return r;
     });
+
+    if (validatedReg) {
+      saveRegistrationCloud(validatedReg);
+    }
 
     // Check if player already has an existing license
     let existingLic = licenses.find(
@@ -616,10 +779,27 @@ export const EsportTab: React.FC<EsportTabProps> = ({
 
   const handleRejectRegistration = (regId: string) => {
     sfx.playClick();
-    const updated = registrations.map((r) => (r.id === regId ? { ...r, status: "refusée" as RegistrationStatus } : r));
+    const updated = registrations.map((r) => {
+      if (r.id === regId) {
+        const rejected: EsportRegistration = { ...r, status: "refusée" as RegistrationStatus };
+        saveRegistrationCloud(rejected);
+        return rejected;
+      }
+      return r;
+    });
     setRegistrations(updated);
     saveEsportRegistrations(updated);
     showToast("Inscription refusée.");
+  };
+
+  const handleDeleteRegistration = async (regId: string) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer définitivement cette inscription ?")) return;
+    sfx.playClick();
+    const updated = registrations.filter((r) => r.id !== regId);
+    setRegistrations(updated);
+    saveEsportRegistrations(updated);
+    await deleteRegistrationCloud(regId);
+    showToast("Inscription supprimée de la gestion E-Sport.");
   };
 
   // Clear All Esport Data
@@ -2032,24 +2212,151 @@ export const EsportTab: React.FC<EsportTabProps> = ({
           </div>
 
           {/* Registrations Management */}
-          <div className="rounded-3xl border border-white/10 bg-[#0E121B] p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          <div className="rounded-3xl border border-white/10 bg-[#0E121B] p-6 shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
               <div>
-                <h3 className="font-['Orbitron'] text-base font-bold text-white flex items-center gap-2">
+                <h3 className="font-['Orbitron'] text-base sm:text-lg font-bold text-white flex items-center gap-2.5">
                   <span>INSCRIPTIONS DES JOUEURS</span>
-                  <span className="rounded-full bg-emerald-500/20 text-emerald-400 text-xs px-2.5 py-0.5">
-                    {registrations.length}
+                  <span className="rounded-full bg-emerald-500/20 text-emerald-400 text-xs px-2.5 py-0.5 font-['JetBrains_Mono'] font-bold">
+                    {registrations.length} total
                   </span>
+                  {registrations.filter((r) => r.status === "en attente").length > 0 && (
+                    <span className="rounded-full bg-amber-500/20 text-amber-300 text-xs px-2.5 py-0.5 font-['JetBrains_Mono'] font-bold animate-pulse">
+                      {registrations.filter((r) => r.status === "en attente").length} en attente
+                    </span>
+                  )}
                 </h3>
                 <p className="font-['Chakra_Petch'] text-xs text-slate-400">
-                  La validation d'une inscription génère automatiquement la licence numérique du joueur.
+                  Synchronisation instantanée en temps réel. La validation d'une inscription génère automatiquement la licence numérique du joueur.
                 </p>
+              </div>
+
+              {/* Notification & Refresh Tools */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sfx.playRegistrationAlert();
+                    showToast("Sonnerie d'alerte testée avec succès ! (Volume OK)");
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 font-['JetBrains_Mono'] text-xs font-bold text-emerald-300 transition active:scale-95"
+                  title="Écouter le bip sonore d'alerte joué lors d'une nouvelle inscription"
+                >
+                  <Volume2 size={13} className="text-emerald-400" />
+                  <span>Tester son d'alerte</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pending = registrations.filter((r) => r.status === "en attente");
+                    const shopPhone = (shopInfo.whatsapp || shopInfo.phone || "+237690000000").replace(/[^0-9]/g, "");
+                    const text = `🎮 *HOUSE GAME ESPORT - NOTIFICATION ADMIN*\n\n` +
+                      `📋 *Inscriptions enregistrées :* ${registrations.length}\n` +
+                      `⏳ *En attente de validation :* ${pending.length}\n\n` +
+                      (pending.length > 0
+                        ? `*Dernières inscriptions à traiter :*\n` +
+                          pending.slice(0, 5).map((r, i) => `${i + 1}. *${r.gamerTag}* (${r.fullName})\n   Tournoi: ${r.tournamentTitle}\n   Tél: ${r.phone}`).join("\n\n")
+                        : `✅ Toutes les inscriptions sont à jour !`);
+                    window.open(`https://api.whatsapp.com/send?phone=${shopPhone}&text=${encodeURIComponent(text)}`, "_blank");
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl border border-[#25D366]/40 bg-[#25D366]/10 hover:bg-[#25D366]/20 px-3 py-2 font-['JetBrains_Mono'] text-xs font-bold text-[#25D366] transition active:scale-95"
+                  title="Recevoir le récapitulatif des inscriptions sur WhatsApp"
+                >
+                  <Phone size={13} />
+                  <span>Alerte WhatsApp</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={requestNotificationPermission}
+                  className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold transition active:scale-95 shadow-sm ${
+                    notificationPermission === "granted"
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+                      : "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                  }`}
+                  title="Activer les alertes sur votre écran à chaque nouvelle inscription"
+                >
+                  {notificationPermission === "granted" ? (
+                    <>
+                      <BellRing size={14} className="text-emerald-400" />
+                      <span>Alertes bureau actives</span>
+                    </>
+                  ) : (
+                    <>
+                      <Bell size={14} className="text-amber-400 animate-bounce" />
+                      <span>M'alerter aux inscriptions</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const l = loadEsportRegistrations();
+                    setRegistrations(l);
+                    onUpdateRegistrations?.(l);
+                    showToast("Liste des inscriptions actualisée !");
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-2 font-['JetBrains_Mono'] text-xs text-slate-300 transition"
+                  title="Recharger manuellement les inscriptions"
+                >
+                  <RefreshCw size={13} />
+                  <span>Actualiser</span>
+                </button>
               </div>
             </div>
 
+            {/* Live Instant Alert Status Banner */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-['JetBrains_Mono']">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                <span>
+                  <strong>Module d'alerte instantanée actif :</strong> Chaque inscription émet un carillon sonore et s'affiche immédiatement en temps réel.
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                <span>Synchronisé via Firestore & Broadcast direct</span>
+              </div>
+            </div>
+
+            {/* Status Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-2 font-['JetBrains_Mono'] text-xs font-bold">
+              {[
+                { id: "all", label: "Toutes", count: registrations.length },
+                { id: "en attente", label: "En attente", count: registrations.filter((r) => r.status === "en attente").length, color: "text-amber-400" },
+                { id: "validée", label: "Validées", count: registrations.filter((r) => r.status === "validée").length, color: "text-emerald-400" },
+                { id: "refusée", label: "Refusées", count: registrations.filter((r) => r.status === "refusée").length, color: "text-rose-400" },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setAdminRegFilter(f.id as any)}
+                  className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 transition ${
+                    adminRegFilter === f.id
+                      ? "bg-white/15 text-white border border-white/20 shadow-sm"
+                      : "bg-white/5 text-slate-400 hover:text-white border border-transparent"
+                  }`}
+                >
+                  <span className={f.color}>{f.label}</span>
+                  <span className="rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] text-slate-300">
+                    {f.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
             {registrations.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/15 p-12 text-center text-xs font-['JetBrains_Mono'] text-slate-400 space-y-2">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-slate-400 mx-auto">
+                  <User size={24} />
+                </div>
+                <p className="font-bold text-white text-sm">Aucune inscription enregistrée pour le moment</p>
+                <p>Dès qu'un joueur valide son inscription sur un tournoi, elle apparaîtra instantanément ici avec son statut et ses coordonnées.</p>
+              </div>
+            ) : registrations.filter((r) => adminRegFilter === "all" || r.status === adminRegFilter).length === 0 ? (
               <div className="p-8 text-center text-xs font-['JetBrains_Mono'] text-slate-400">
-                Aucune inscription de joueur enregistrée pour le moment.
+                Aucune inscription dans la catégorie « {adminRegFilter} ».
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -2065,50 +2372,77 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {registrations.map((r) => (
-                      <tr key={r.id} className="hover:bg-white/[0.02]">
-                        <td className="py-3 px-3 font-bold text-slate-400">{r.id}</td>
-                        <td className="py-3 px-3">
-                          <strong className="text-white block font-['Orbitron']">{r.gamerTag}</strong>
-                          <span className="text-[10px] text-slate-400">{r.fullName}</span>
-                        </td>
-                        <td className="py-3 px-3 text-slate-300 max-w-xs truncate">{r.tournamentTitle}</td>
-                        <td className="py-3 px-3 text-slate-300">{r.phone}</td>
-                        <td className="py-3 px-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              r.status === "validée"
-                                ? "bg-emerald-500/20 text-emerald-400"
-                                : r.status === "en attente"
-                                ? "bg-amber-500/20 text-amber-400"
-                                : "bg-rose-500/20 text-rose-400"
-                            }`}
-                          >
-                            {r.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {r.status !== "validée" && (
-                              <button
-                                onClick={() => handleValidateRegistration(r)}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold"
+                    {registrations
+                      .filter((r) => adminRegFilter === "all" || r.status === adminRegFilter)
+                      .map((r) => (
+                        <tr key={r.id} className="hover:bg-white/[0.02] transition">
+                          <td className="py-3 px-3 font-bold text-slate-400">{r.id}</td>
+                          <td className="py-3 px-3">
+                            <strong className="text-white block font-['Orbitron']">{r.gamerTag}</strong>
+                            <span className="text-[10px] text-slate-400">{r.fullName}</span>
+                          </td>
+                          <td className="py-3 px-3 text-slate-300 max-w-xs truncate">{r.tournamentTitle}</td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-300">{r.phone}</span>
+                              <a
+                                href={`https://api.whatsapp.com/send?phone=${r.phone.replace(/[^0-9]/g, "")}&text=${encodeURIComponent(
+                                  `Bonjour ${r.gamerTag}, c'est la direction HOUSE GAME ESPORT concernant votre inscription au tournoi ${r.tournamentTitle}.`
+                                )}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-lg bg-[#25D366]/20 border border-[#25D366]/40 hover:bg-[#25D366]/30 p-1.5 text-[#25D366] transition active:scale-95"
+                                title="Contacter le joueur sur WhatsApp"
                               >
-                                Valider & Émettre Licence
-                              </button>
-                            )}
-                            {r.status === "en attente" && (
+                                <Phone size={12} />
+                              </a>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                r.status === "validée"
+                                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                  : r.status === "en attente"
+                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                  : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                              }`}
+                            >
+                              {r.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {r.status !== "validée" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleValidateRegistration(r)}
+                                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold shadow-sm transition active:scale-95"
+                                >
+                                  Valider & Licence
+                                </button>
+                              )}
+                              {r.status === "en attente" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectRegistration(r.id)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[11px] transition"
+                                >
+                                  Refuser
+                                </button>
+                              )}
                               <button
-                                onClick={() => handleRejectRegistration(r.id)}
-                                className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 text-[11px]"
+                                type="button"
+                                onClick={() => handleDeleteRegistration(r.id)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                                title="Supprimer définitivement l'inscription"
                               >
-                                Refuser
+                                <Trash2 size={13} />
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
