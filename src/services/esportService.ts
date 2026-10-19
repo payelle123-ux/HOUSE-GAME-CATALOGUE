@@ -121,7 +121,21 @@ export function compressLogoPreservingAlpha(file: File, maxDim = 800): Promise<s
   });
 }
 
-// ==================== SEED INITIAL DATA ====================
+/**
+ * Construit l'URL directe de partage pour un tournoi spécifique.
+ * Le lien inclut le paramètre ?tab=esport&tournament=ID et l'ancre #tournament-ID
+ * pour permettre à n'importe quel membre de la communauté d'atterrir directement sur l'onglet Esport
+ * et de voir immédiatement le tournoi sélectionné et mis en valeur.
+ */
+export function getTournamentShareUrl(tournamentId: string): string {
+  try {
+    const origin = window.location.origin || "";
+    const pathname = window.location.pathname || "/";
+    return `${origin}${pathname}?tab=esport&tournament=${encodeURIComponent(tournamentId)}#tournament-${encodeURIComponent(tournamentId)}`;
+  } catch {
+    return `?tab=esport&tournament=${encodeURIComponent(tournamentId)}#tournament-${encodeURIComponent(tournamentId)}`;
+  }
+}
 
 // ==================== SEED INITIAL DATA (ALL EMPTY AS REQUESTED) ====================
 
@@ -368,6 +382,15 @@ export async function saveLicenseCloud(lic: EsportLicense): Promise<void> {
     await setDoc(docRef, sanitized, { merge: true });
   } catch (err) {
     console.warn("Firestore saveLicenseCloud fallback:", err);
+  }
+}
+
+export async function deleteLicenseCloud(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, COLL_LICENSES, id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn("Firestore deleteLicenseCloud fallback:", err);
   }
 }
 

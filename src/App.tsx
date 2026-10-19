@@ -123,9 +123,65 @@ const ORDERED_CATEGORIES = [
   "Customisation",
 ];
 
+function parseInitialRoute(): { tab: NavTabId; tournamentId: string | null } {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab") as NavTabId | null;
+    const tournamentParam = params.get("tournament");
+    const hash = window.location.hash || "";
+
+    if (tournamentParam || hash.includes("tournament")) {
+      const parsedId =
+        tournamentParam ||
+        hash.match(/tournament[=-]([a-zA-Z0-9_-]+)/)?.[1] ||
+        null;
+      return { tab: "esport", tournamentId: parsedId };
+    }
+
+    if (tabParam) {
+      return { tab: tabParam, tournamentId: null };
+    }
+
+    if (hash) {
+      const lower = hash.toLowerCase();
+      if (lower.includes("esport")) return { tab: "esport", tournamentId: null };
+      if (lower.includes("boutique")) return { tab: "boutique", tournamentId: null };
+      if (lower.includes("events")) return { tab: "events", tournamentId: null };
+      if (lower.includes("campus")) return { tab: "campus", tournamentId: null };
+      if (lower.includes("activities")) return { tab: "activities", tournamentId: null };
+      if (lower.includes("repair")) return { tab: "repair", tournamentId: null };
+      if (lower.includes("service")) return { tab: "services", tournamentId: null };
+      if (lower.includes("hgevent")) return { tab: "hgevent", tournamentId: null };
+    }
+  } catch (err) {
+    console.warn("Could not parse initial route:", err);
+  }
+  return { tab: "home", tournamentId: null };
+}
+
 export default function App() {
-  // Navigation State
-  const [activeTab, setActiveTab] = useState<NavTabId>("home");
+  // Navigation State with URL & Tournament deep-link parsing
+  const initialRoute = useMemo(() => parseInitialRoute(), []);
+  const [activeTab, setActiveTab] = useState<NavTabId>(initialRoute.tab);
+  const [targetTournamentId, setTargetTournamentId] = useState<string | null>(initialRoute.tournamentId);
+
+  // Sync state if user clicks browser back/forward or navigates via hash
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const route = parseInitialRoute();
+      setActiveTab(route.tab);
+      if (route.tournamentId) {
+        setTargetTournamentId(route.tournamentId);
+      }
+    };
+
+    window.addEventListener("popstate", handleUrlChange);
+    window.addEventListener("hashchange", handleUrlChange);
+    return () => {
+      window.removeEventListener("popstate", handleUrlChange);
+      window.removeEventListener("hashchange", handleUrlChange);
+    };
+  }, []);
 
   // Core Data States
   const [products, setProducts] = useState<Product[]>(() => loadProducts());
@@ -1117,6 +1173,8 @@ export default function App() {
             tournaments={tournaments}
             shopInfo={shopInfo}
             isAdmin={isAdmin}
+            targetTournamentId={targetTournamentId}
+            onClearTargetTournament={() => setTargetTournamentId(null)}
             onOpenAddTournament={() => {
               setEditingTournament(null);
               setIsTournamentModalOpen(true);

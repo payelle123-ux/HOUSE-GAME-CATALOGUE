@@ -48,6 +48,8 @@ import {
   FolderOpen,
   Sliders,
   Upload,
+  Share2,
+  Copy,
 } from "lucide-react";
 import { EsportDigitalLicenseCard } from "./EsportDigitalLicenseCard";
 import { EsportBracketViewer } from "./EsportBracketViewer";
@@ -61,6 +63,7 @@ import {
   loadEsportLicenses,
   saveEsportLicenses,
   saveLicenseCloud,
+  deleteLicenseCloud,
   loadEsportMatches,
   saveEsportMatches,
   saveMatchCloud,
@@ -82,6 +85,7 @@ import {
   saveEsportBannerConfig,
   compressLogoPreservingAlpha,
   DEFAULT_ESPORT_BANNER_CONFIG,
+  getTournamentShareUrl,
 } from "../services/esportService";
 import { sfx } from "../services/soundEffects";
 import { compressImage } from "../services/storage";
@@ -90,6 +94,8 @@ interface EsportTabProps {
   tournaments: Tournament[];
   shopInfo: ShopInfo;
   isAdmin: boolean;
+  targetTournamentId?: string | null;
+  onClearTargetTournament?: () => void;
   onOpenAddTournament: () => void;
   onEditTournament: (tournament: Tournament) => void;
   onDeleteTournament: (tournament: Tournament) => void;
@@ -101,6 +107,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   tournaments: parentTournaments,
   shopInfo,
   isAdmin,
+  targetTournamentId,
+  onClearTargetTournament,
   onOpenAddTournament,
   onEditTournament,
   onDeleteTournament,
@@ -176,6 +184,87 @@ export const EsportTab: React.FC<EsportTabProps> = ({
 
   // Rules Modal State
   const [viewingRulesTournament, setViewingRulesTournament] = useState<Tournament | null>(null);
+
+  // Share Tournament Modal State
+  const [sharingTournament, setSharingTournament] = useState<Tournament | null>(null);
+  const [copiedShareUrl, setCopiedShareUrl] = useState(false);
+
+  // Target / Highlighted Tournament for deep-linking
+  const [highlightedTournamentId, setHighlightedTournamentId] = useState<string | null>(() => {
+    if (targetTournamentId) return targetTournamentId;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("tournament") || (window.location.hash.match(/tournament[=-]([a-zA-Z0-9_-]+)/)?.[1] || null);
+    } catch {
+      return null;
+    }
+  });
+
+  // When targetTournamentId changes or deep link is accessed, activate tournaments subView and scroll into view
+  useEffect(() => {
+    const tid = targetTournamentId || (() => {
+      try {
+        const p = new URLSearchParams(window.location.search);
+        return p.get("tournament") || (window.location.hash.match(/tournament[=-]([a-zA-Z0-9_-]+)/)?.[1] || null);
+      } catch {
+        return null;
+      }
+    })();
+
+    if (tid) {
+      setSubView("tournaments");
+      setHighlightedTournamentId(tid);
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`tournament-${tid}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [targetTournamentId]);
+
+  const handleOpenShareModal = (t: Tournament) => {
+    sfx.playClick();
+    setSharingTournament(t);
+    setCopiedShareUrl(false);
+  };
+
+  const handleCopyTournamentLink = (t: Tournament) => {
+    const url = getTournamentShareUrl(t.id);
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedShareUrl(true);
+      sfx.playSuccess();
+      showToast("Lien du tournoi copié ! Partagez-le avec votre communauté.");
+      setTimeout(() => setCopiedShareUrl(false), 3000);
+    }).catch(() => {
+      showToast("Lien généré : " + url);
+    });
+  };
+
+  const handleNativeShare = async (t: Tournament) => {
+    const url = getTournamentShareUrl(t.id);
+    const title = `${t.title} - HOUSE GAME ESPORT`;
+    const text = `Rejoins le tournoi ${t.title} sur HOUSE GAME ESPORT ! Cash prize : ${t.cashPrize}. Inscriptions ouvertes dès maintenant !`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          text,
+          url,
+        });
+        showToast("Lien partagé avec succès !");
+      } catch {
+        handleCopyTournamentLink(t);
+      }
+    } else {
+      handleCopyTournamentLink(t);
+    }
+  };
+
+  // License Deletion Confirmation State
+  const [licenseToDelete, setLicenseToDelete] = useState<EsportLicense | null>(null);
 
   // License Public Verification
   const [verificationQuery, setVerificationQuery] = useState("");
@@ -570,6 +659,76 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     if (target) saveLicenseCloud(target);
 
     showToast(`Licence ${licenseId} désormais ${nextStatus.toUpperCase()}`);
+  };
+
+  // Delete License Handlers
+  const handleRequestDeleteLicense = (lic: EsportLicense) => {
+    sfx.playClick();
+    setLicenseToDelete(lic);
+  };
+
+  const handleConfirmDeleteLicense = async () => {
+    if (!licenseToDelete) return;
+    const lic = licenseToDelete;
+    sfx.playClick();
+
+    // 1. Remove from local licenses
+    const updatedLicenses = licenses.filter((l) => l.id !== lic.id);
+    setLicenses(updatedLicenses);
+    saveEsportLicenses(updatedLicenses);
+
+    // 2. Remove from cloud (Firestore)
+    try {
+      await deleteLicenseCloud(lic.id);
+    } catch (err) {
+      console.warn("deleteLicenseCloud error:", err);
+    }
+
+    // 3. Clear public verification query result if matching
+    if (verificationResult?.license?.id === lic.id) {
+      setVerificationResult(null);
+    }
+
+    // 4. Update player's reference to license
+    setPlayers((prev) => {
+      const updated = prev.map((p) => {
+        if (p.licenseId === lic.id || p.id === lic.playerId) {
+          return { ...p, licenseId: "" };
+        }
+        return p;
+      });
+      saveEsportPlayers(updated);
+      return updated;
+    });
+
+    // 5. Update registrations referencing this license
+    setRegistrations((prev) => {
+      const updated = prev.map((r) => {
+        if (r.licenseId === lic.id) {
+          return { ...r, licenseId: undefined };
+        }
+        return r;
+      });
+      saveEsportRegistrations(updated);
+      return updated;
+    });
+
+    // 6. Audit Log
+    const newLog: EsportAuditLog = {
+      id: `log-${Date.now()}`,
+      action: "Suppression de carte de licence",
+      actor: "Direction Esport",
+      targetId: lic.id,
+      targetType: "joueur",
+      details: `Suppression définitive de la carte de licence ${lic.id} du joueur ${lic.gamerTag} (${lic.fullName}).`,
+      timestamp: Date.now(),
+    };
+    const updatedLogs = [newLog, ...logs];
+    setLogs(updatedLogs);
+    saveEsportLogs(updatedLogs);
+
+    showToast(`Carte de licence ${lic.id} supprimée définitivement !`);
+    setLicenseToDelete(null);
   };
 
   // Bracket Generation
@@ -1102,8 +1261,31 @@ export const EsportTab: React.FC<EsportTabProps> = ({
               return (
                 <div
                   key={t.id}
-                  className="group flex flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-[#0E121B] shadow-2xl transition hover:border-emerald-500/50 hover:bg-[#121723]"
+                  id={`tournament-${t.id}`}
+                  className={`group relative flex flex-col justify-between overflow-hidden rounded-3xl border transition-all duration-500 ${
+                    highlightedTournamentId === t.id
+                      ? "border-emerald-400 bg-[#121926] ring-4 ring-emerald-500/50 shadow-[0_0_40px_rgba(0,255,136,0.35)] scale-[1.01]"
+                      : "border-white/10 bg-[#0E121B] shadow-2xl hover:border-emerald-500/50 hover:bg-[#121723]"
+                  }`}
                 >
+                  {/* Deep link active banner */}
+                  {highlightedTournamentId === t.id && (
+                    <div className="flex items-center justify-between gap-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 px-4 py-2 text-xs font-['JetBrains_Mono'] font-bold text-white shadow-md animate-pulse">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-[#00FF88]" />
+                        <span>TOURNOI SÉLECTIONNÉ VIA LE LIEN PARTAGÉ</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setHighlightedTournamentId(null)}
+                        className="text-white/80 hover:text-white p-0.5 rounded hover:bg-black/20"
+                        title="Fermer la mise en avant"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  )}
+
                   <div>
                     {/* Top Image Banner */}
                     <div className="relative h-48 w-full overflow-hidden bg-slate-900">
@@ -1212,6 +1394,16 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                       >
                         <Trophy size={14} />
                         <span>S'inscrire au tournoi</span>
+                      </button>
+
+                      {/* Share Tournament Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleOpenShareModal(t)}
+                        title="Partager le lien de ce tournoi avec votre communauté (WhatsApp, réseaux, QR code)"
+                        className="flex items-center justify-center rounded-xl border border-[#3E9BFF]/40 bg-[#3E9BFF]/15 hover:bg-[#3E9BFF]/25 p-3 text-[#3E9BFF] hover:text-white transition active:scale-95 shadow-sm"
+                      >
+                        <Share2 size={16} />
                       </button>
 
                       <button
@@ -1389,6 +1581,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                   key={lic.id}
                   license={lic}
                   customLogoUrl={bannerConfig.logoUrl}
+                  onDelete={() => handleRequestDeleteLicense(lic)}
                   onVerifyClick={() => {
                     setVerificationQuery(lic.id);
                     const res = verifyEsportLicense(lic.id, licenses);
@@ -1732,6 +1925,12 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                       )!
                     }
                     customLogoUrl={bannerConfig.logoUrl}
+                    onDelete={() => {
+                      const lic = licenses.find(
+                        (l) => l.playerId === loggedPlayer.id || l.gamerTag.toLowerCase() === loggedPlayer.gamerTag.toLowerCase()
+                      );
+                      if (lic) handleRequestDeleteLicense(lic);
+                    }}
                   />
                 ) : (
                   <div className="rounded-2xl border border-dashed border-amber-500/40 bg-amber-500/5 p-6 text-center text-xs font-['JetBrains_Mono'] text-amber-300">
@@ -1962,12 +2161,23 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <button
-                            onClick={() => handleToggleLicenseStatus(lic.id, lic.status)}
-                            className="px-2.5 py-1 rounded-lg border border-white/10 text-[11px] text-slate-300 hover:text-white hover:bg-white/5"
-                          >
-                            {lic.status === "Active" ? "Suspendre" : "Réactiver"}
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleToggleLicenseStatus(lic.id, lic.status)}
+                              className="px-2.5 py-1 rounded-lg border border-white/10 text-[11px] text-slate-300 hover:text-white hover:bg-white/5 transition"
+                            >
+                              {lic.status === "Active" ? "Suspendre" : "Réactiver"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRequestDeleteLicense(lic)}
+                              title="Supprimer définitivement la carte de licence"
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-500/30 bg-rose-500/10 text-[11px] font-bold text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition"
+                            >
+                              <Trash2 size={12} />
+                              <span>Supprimer</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -2224,10 +2434,231 @@ export const EsportTab: React.FC<EsportTabProps> = ({
               </div>
             </div>
 
-            <div className="pt-2 text-right">
+            <div className="pt-2 flex items-center justify-between border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  const t = viewingRulesTournament;
+                  setViewingRulesTournament(null);
+                  handleOpenShareModal(t);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3E9BFF]/20 border border-[#3E9BFF]/40 hover:bg-[#3E9BFF]/30 font-['JetBrains_Mono'] text-xs font-bold text-[#3E9BFF] hover:text-white transition active:scale-95 shadow-sm"
+              >
+                <Share2 size={13} />
+                <span>Partager ce tournoi</span>
+              </button>
+
               <button
                 onClick={() => setViewingRulesTournament(null)}
                 className="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/20 font-['JetBrains_Mono'] text-xs text-white"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL : PARTAGER LE TOURNOI                                               */}
+      {/* ========================================================================= */}
+      {sharingTournament && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm overflow-y-auto animate-fadeIn"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setSharingTournament(null);
+          }}
+        >
+          <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[#3E9BFF]/40 bg-[#0C101A] p-6 sm:p-8 shadow-[0_0_50px_rgba(62,155,255,0.25)] space-y-6">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#3E9BFF]/40 bg-[#3E9BFF]/15 text-[#3E9BFF] shadow-[0_0_15px_rgba(62,155,255,0.3)]">
+                  <Share2 size={22} />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-1.5 font-['JetBrains_Mono'] text-[11px] font-bold text-[#3E9BFF]">
+                    <Swords size={13} />
+                    <span>DIFFUSION COMMUNAUTAIRE</span>
+                  </div>
+                  <h3 className="font-['Orbitron'] text-base sm:text-lg font-bold text-white">
+                    PARTAGER LE TOURNOI
+                  </h3>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSharingTournament(null)}
+                className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Tournament Preview Card */}
+            <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <img
+                src={sharingTournament.image || "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=400&q=80"}
+                alt={sharingTournament.title}
+                className="h-20 w-24 rounded-xl object-cover border border-white/10 shrink-0"
+              />
+              <div className="min-w-0 flex-1 space-y-1">
+                <span className="inline-block rounded-md bg-[#3E9BFF]/20 px-2 py-0.5 font-['JetBrains_Mono'] text-[10px] font-bold text-[#3E9BFF]">
+                  {sharingTournament.game} • {sharingTournament.platform}
+                </span>
+                <h4 className="font-['Orbitron'] text-sm font-bold text-white truncate">
+                  {sharingTournament.title}
+                </h4>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-['JetBrains_Mono'] text-slate-300">
+                  <span className="text-emerald-400 font-bold">{sharingTournament.date}</span>
+                  <span className="text-white/30">•</span>
+                  <span className="text-amber-400 font-bold">Prize: {sharingTournament.cashPrize}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Direct Link Section */}
+            <div className="space-y-2">
+              <label className="flex items-center justify-between font-['JetBrains_Mono'] text-xs font-bold text-slate-300">
+                <span>Lien direct vers la rubrique E-Sport & ce tournoi :</span>
+                {copiedShareUrl && (
+                  <span className="text-emerald-400 flex items-center gap-1 text-[11px]">
+                    <Check size={12} /> Copié dans le presse-papiers !
+                  </span>
+                )}
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    readOnly
+                    value={getTournamentShareUrl(sharingTournament.id)}
+                    className="w-full rounded-xl border border-white/15 bg-black/60 px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs text-slate-200 select-all focus:border-[#3E9BFF] focus:outline-none"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyTournamentLink(sharingTournament)}
+                  className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 font-['JetBrains_Mono'] text-xs font-bold transition active:scale-95 shrink-0 ${
+                    copiedShareUrl
+                      ? "bg-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+                      : "bg-[#3E9BFF] text-white hover:bg-[#3282db] shadow-[0_0_15px_rgba(62,155,255,0.4)]"
+                  }`}
+                >
+                  {copiedShareUrl ? (
+                    <>
+                      <Check size={14} />
+                      <span>Copié !</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} />
+                      <span>Copier</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="font-['Chakra_Petch'] text-[11px] text-slate-400">
+                Ce lien permet à la communauté d'arriver directement dans l'onglet E-Sport et de visualiser immédiatement ce tournoi sélectionné pour s'inscrire en quelques secondes.
+              </p>
+            </div>
+
+            {/* Social Share Buttons */}
+            <div className="space-y-3">
+              <div className="font-['Orbitron'] text-xs font-bold text-slate-300">
+                PARTAGE RAPIDE EN 1 CLIC :
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* WhatsApp */}
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                    `🏆 *HOUSE GAME ESPORT - REJOINS LE TOURNOI !*\n\n🎮 *${sharingTournament.title}*\n🎮 Jeu : ${sharingTournament.game} (${sharingTournament.platform})\n💰 Cash Prize Garanti : *${sharingTournament.cashPrize}*\n📅 Date : ${sharingTournament.date} (${sharingTournament.time})\n📍 Lieu : ${sharingTournament.location}\n🎟️ Inscription : ${sharingTournament.entryFee}\n\n👉 *Rejoins la compétition et réserve ta place directement ici :*\n${getTournamentShareUrl(sharingTournament.id)}`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366]/20 border border-[#25D366]/40 hover:bg-[#25D366]/30 px-4 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-[#25D366] transition active:scale-95 shadow-sm"
+                >
+                  <Phone size={14} />
+                  <span>Partager sur WhatsApp</span>
+                </a>
+
+                {/* Native Device Share */}
+                <button
+                  type="button"
+                  onClick={() => handleNativeShare(sharingTournament)}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/15 hover:bg-white/15 px-4 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-white transition active:scale-95"
+                >
+                  <Share2 size={14} className="text-[#3E9BFF]" />
+                  <span>Menu partage appareil</span>
+                </button>
+
+                {/* Facebook */}
+                <a
+                  href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getTournamentShareUrl(sharingTournament.id))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-[#1877F2]/20 border border-[#1877F2]/40 hover:bg-[#1877F2]/30 px-4 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-[#1877F2] transition active:scale-95"
+                >
+                  <ExternalLink size={14} />
+                  <span>Partager sur Facebook</span>
+                </a>
+
+                {/* X / Twitter */}
+                <a
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                    `🏆 Rejoins le tournoi officiel ${sharingTournament.title} sur HOUSE GAME ESPORT ! Cash prize: ${sharingTournament.cashPrize} 🔥`
+                  )}&url=${encodeURIComponent(getTournamentShareUrl(sharingTournament.id))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 px-4 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-slate-200 transition active:scale-95"
+                >
+                  <ExternalLink size={14} />
+                  <span>Partager sur X / Twitter</span>
+                </a>
+              </div>
+            </div>
+
+            {/* QR Code Section */}
+            <div className="rounded-2xl border border-white/10 bg-black/40 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <QrCode size={16} className="text-emerald-400" />
+                  <span className="font-['Orbitron'] text-xs font-bold text-white">
+                    QR CODE OFFICIEL DU TOURNOI
+                  </span>
+                </div>
+                <span className="text-[10px] font-['JetBrains_Mono'] text-emerald-400 font-bold">
+                  Accès instantané
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="flex h-28 w-28 items-center justify-center rounded-xl border border-emerald-500/40 bg-[#0A0D14] p-2 shadow-inner shrink-0">
+                  <img
+                    src={generateSvgQrDataUri(getTournamentShareUrl(sharingTournament.id))}
+                    alt="QR Code du tournoi"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <div className="text-left space-y-2 text-xs font-['Chakra_Petch'] text-slate-300">
+                  <p>
+                    Vos joueurs peuvent scanner ce QR code avec l'appareil photo de leur téléphone pour atterrir directement sur ce tournoi dans HOUSE GAME ESPORT.
+                  </p>
+                  <p className="text-[11px] font-['JetBrains_Mono'] text-emerald-400">
+                    Idéal pour vos affiches physiques, projections en salle et story WhatsApp / Instagram.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Close footer */}
+            <div className="flex justify-end pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setSharingTournament(null)}
+                className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 font-['JetBrains_Mono'] text-xs font-bold text-white transition"
               >
                 Fermer
               </button>
@@ -2462,6 +2893,76 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL : CONFIRMATION SUPPRESSION LICENCE                                  */}
+      {/* ========================================================================= */}
+      {licenseToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fadeIn"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setLicenseToDelete(null);
+          }}
+        >
+          <div className="relative w-full max-w-md rounded-3xl border border-rose-500/40 bg-[#0E131E] p-6 sm:p-7 shadow-2xl space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/10 text-rose-400">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="font-['Orbitron'] text-base font-bold text-white">
+                  SUPPRIMER LA LICENCE
+                </h3>
+                <p className="font-['JetBrains_Mono'] text-xs text-rose-400 font-bold">
+                  {licenseToDelete.id}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-xs font-['JetBrains_Mono']">
+              <div className="flex justify-between py-1 border-b border-white/5">
+                <span className="text-slate-400">Joueur :</span>
+                <strong className="text-white">{licenseToDelete.gamerTag}</strong>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/5">
+                <span className="text-slate-400">Nom complet :</span>
+                <span className="text-slate-200">{licenseToDelete.fullName}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/5">
+                <span className="text-slate-400">Statut :</span>
+                <span className="text-emerald-400 font-bold">{licenseToDelete.status}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400">Date d'émission :</span>
+                <span className="text-slate-300">{licenseToDelete.issuedAt}</span>
+              </div>
+            </div>
+
+            <p className="font-['Chakra_Petch'] text-xs text-slate-300 leading-relaxed">
+              Êtes-vous sûr de vouloir supprimer définitivement cette carte de licence numérique ?
+              Son certificat officiel sera annulé et la carte sera retirée de l'annuaire public.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setLicenseToDelete(null)}
+                className="rounded-xl px-4 py-2 font-['JetBrains_Mono'] text-xs text-slate-400 hover:text-white transition"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteLicense}
+                className="flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 px-5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] transition active:scale-95"
+              >
+                <Trash2 size={13} />
+                <span>Confirmer la suppression</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

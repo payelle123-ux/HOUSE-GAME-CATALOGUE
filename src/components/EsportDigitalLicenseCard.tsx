@@ -13,6 +13,7 @@ import {
   Check,
   Calendar,
   Gamepad2,
+  Trash2,
 } from "lucide-react";
 import { generateSvgQrDataUri } from "../services/esportService";
 
@@ -21,6 +22,7 @@ interface EsportDigitalLicenseCardProps {
   showActions?: boolean;
   onVerifyClick?: () => void;
   customLogoUrl?: string;
+  onDelete?: () => void;
 }
 
 export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> = ({
@@ -28,6 +30,7 @@ export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> =
   showActions = true,
   onVerifyClick,
   customLogoUrl,
+  onDelete,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -183,8 +186,8 @@ export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> =
             </div>
           </div>
 
-          {/* Status Badge */}
-          <div className="flex flex-col items-end gap-1">
+          {/* Status Badge & Delete Icon */}
+          <div className="flex items-center gap-2">
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-['JetBrains_Mono'] text-[11px] font-bold border ${
                 license.status === "Active"
@@ -201,6 +204,20 @@ export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> =
               )}
               <span>{license.status.toUpperCase()}</span>
             </span>
+
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                title="Supprimer cette carte de licence"
+                className="p-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/25 hover:text-rose-200 transition"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -322,7 +339,7 @@ export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> =
         </div>
       </div>
 
-      {/* ACTION BUTTONS (Download / Verify) */}
+      {/* ACTION BUTTONS (Download / Verify / Delete) */}
       {showActions && (
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
           <button
@@ -340,7 +357,19 @@ export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> =
               className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-['JetBrains_Mono'] text-xs text-slate-300 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-white transition"
             >
               <QrCode size={14} className="text-emerald-400" />
-              <span>Tester la vérification publique</span>
+              <span>Vérifier</span>
+            </button>
+          )}
+
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              title="Supprimer définitivement cette licence"
+              className="flex items-center gap-1.5 rounded-xl border border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20 px-4 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-rose-300 hover:text-rose-200 transition active:scale-95"
+            >
+              <Trash2 size={14} />
+              <span>Supprimer</span>
             </button>
           )}
         </div>
