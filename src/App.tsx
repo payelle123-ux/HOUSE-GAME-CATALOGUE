@@ -391,6 +391,11 @@ export default function App() {
               return updated;
             });
           }
+          if (event.data?.type === "update-registrations" && Array.isArray(event.data?.payload)) {
+            const updated = event.data.payload as EsportRegistration[];
+            setEsportRegistrations(updated);
+            saveEsportRegistrations(updated);
+          }
         };
       }
     } catch (e) {
@@ -412,7 +417,30 @@ export default function App() {
       }
     };
 
+    const handleEsportEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ type: string; payload: unknown }>;
+      if (customEvent.detail) {
+        const { type, payload } = customEvent.detail;
+        if (type === "new-registration" && payload) {
+          const incoming = payload as EsportRegistration;
+          sfx.playRegistrationAlert();
+          setNewRegAlert(incoming);
+          setEsportRegistrations((prev) => {
+            if (prev.some((r) => r.id === incoming.id)) return prev;
+            const updated = [incoming, ...prev];
+            saveEsportRegistrations(updated);
+            return updated;
+          });
+        }
+        if (type === "update-registrations" && Array.isArray(payload)) {
+          setEsportRegistrations(payload as EsportRegistration[]);
+          saveEsportRegistrations(payload as EsportRegistration[]);
+        }
+      }
+    };
+
     window.addEventListener("hg:new-registration", handleCustomReg);
+    window.addEventListener("hg:esport-event", handleEsportEvent);
 
     return () => {
       unsubProducts();
@@ -430,6 +458,7 @@ export default function App() {
         try { bc.close(); } catch { /* ignore */ }
       }
       window.removeEventListener("hg:new-registration", handleCustomReg);
+      window.removeEventListener("hg:esport-event", handleEsportEvent);
     };
   }, []);
 

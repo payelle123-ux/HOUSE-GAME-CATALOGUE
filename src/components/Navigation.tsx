@@ -145,7 +145,13 @@ export const Navigation: React.FC<NavigationProps> = ({
                 </div>
 
                 {tab.badge !== undefined && (
-                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#FF4438] px-1.5 text-[10px] font-black text-white shadow-[0_0_10px_rgba(255,68,56,0.8)] animate-pulse">
+                  <span
+                    className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-black text-white ${
+                      tab.id === "esport"
+                        ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.9)] animate-bounce"
+                        : "bg-[#FF4438] shadow-[0_0_10px_rgba(255,68,56,0.8)] animate-pulse"
+                    }`}
+                  >
                     {tab.badge}
                   </span>
                 )}

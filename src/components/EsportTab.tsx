@@ -152,20 +152,16 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     }
   }, [propRegistrations]);
   const [licenses, setLicenses] = useState<EsportLicense[]>(() => {
-    const loaded = loadEsportLicenses();
-    return loaded.filter((l) => !l.id.startsWith("HGE-2026-100"));
+    return loadEsportLicenses();
   });
   const [matches, setMatches] = useState<EsportMatch[]>(() => {
-    const loaded = loadEsportMatches();
-    return loaded.filter((m) => !["M-01", "M-02", "M-03", "M-04", "M-05"].includes(m.id));
+    return loadEsportMatches();
   });
   const [players, setPlayers] = useState<EsportPlayer[]>(() => {
-    const loaded = loadEsportPlayers();
-    return loaded.filter((p) => !p.id.startsWith("HGP-100"));
+    return loadEsportPlayers();
   });
   const [logs, setLogs] = useState<EsportAuditLog[]>(() => {
-    const loaded = loadEsportLogs();
-    return loaded.filter((lg) => !["log-1", "log-2", "log-3"].includes(lg.id));
+    return loadEsportLogs();
   });
 
   // Set initial subView if provided
@@ -208,10 +204,14 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       if (typeof window !== "undefined" && "BroadcastChannel" in window) {
         bc = new BroadcastChannel("hg_esport_channel_v3");
         bc.onmessage = (event) => {
-          if (event.data?.type === "new-registration") {
+          const type = event.data?.type;
+          if (type === "new-registration" || type === "update-registrations" || type === "update-registration") {
             const reloaded = loadEsportRegistrations();
             setRegistrations(reloaded);
             onUpdateRegistrations?.(reloaded);
+          }
+          if (type === "new-license" || type === "update-license" || type === "delete-license" || type === "update-licenses") {
+            setLicenses(loadEsportLicenses());
           }
         };
       }
@@ -230,10 +230,17 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       }
     };
 
-    const handleCustomReg = () => {
-      const reloaded = loadEsportRegistrations();
-      setRegistrations(reloaded);
-      onUpdateRegistrations?.(reloaded);
+    const handleCustomReg = (e?: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      const type = detail?.type;
+      if (!type || type === "new-registration" || type === "update-registrations" || type === "update-registration") {
+        const reloaded = loadEsportRegistrations();
+        setRegistrations(reloaded);
+        onUpdateRegistrations?.(reloaded);
+      }
+      if (!type || type === "new-license" || type === "update-license" || type === "delete-license" || type === "update-licenses") {
+        setLicenses(loadEsportLicenses());
+      }
     };
 
     window.addEventListener("storage", handleStorage);
@@ -708,6 +715,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
 
     if (validatedReg) {
       saveRegistrationCloud(validatedReg);
+      broadcastEsportEvent("update-registration", validatedReg);
     }
 
     // Check if player already has an existing license
@@ -717,7 +725,6 @@ export const EsportTab: React.FC<EsportTabProps> = ({
 
     if (!existingLic) {
       const newLicenseId = generateLicenseNumber();
-      const currentYear = new Date().getFullYear();
       const issuedStr = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
       const expiresStr = new Date(Date.now() + 86400000 * 365).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
 
@@ -741,11 +748,26 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       setLicenses(updatedLics);
       saveEsportLicenses(updatedLics);
       saveLicenseCloud(newLic);
+      broadcastEsportEvent("new-license", newLic);
       existingLic = newLic;
+    } else {
+      if (!existingLic.gameSpecialties.includes(reg.game)) {
+        existingLic = {
+          ...existingLic,
+          gameSpecialties: [...existingLic.gameSpecialties, reg.game],
+        };
+        const updatedLics = licenses.map((l) => (l.id === existingLic!.id ? existingLic! : l));
+        setLicenses(updatedLics);
+        saveEsportLicenses(updatedLics);
+        saveLicenseCloud(existingLic);
+        broadcastEsportEvent("update-license", existingLic);
+      }
     }
 
     setRegistrations(updatedRegs);
     saveEsportRegistrations(updatedRegs);
+    onUpdateRegistrations?.(updatedRegs);
+    broadcastEsportEvent("update-registrations", updatedRegs);
 
     // Update slots in tournament
     const updatedTournList = tournamentsList.map((t) => {
@@ -759,6 +781,37 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     });
     setTournamentsList(updatedTournList);
     saveEsportTournaments(updatedTournList);
+
+    // Update or create player profile
+    setPlayers((prev) => {
+      const match = prev.find((p) => p.gamerTag.toLowerCase() === reg.gamerTag.toLowerCase() || p.id === reg.playerId);
+      let updated: EsportPlayer[];
+      if (match) {
+        updated = prev.map((p) => (p.id === match.id ? { ...p, licenseId: existingLic?.id || p.licenseId } : p));
+      } else {
+        const newPlayer: EsportPlayer = {
+          id: reg.playerId,
+          gamerTag: reg.gamerTag,
+          fullName: reg.fullName,
+          phone: reg.phone,
+          email: reg.email,
+          photoUrl: reg.photoUrl,
+          platform: reg.platform,
+          favoriteGame: reg.game,
+          rankTitle: "Challenger",
+          points: 100,
+          matchesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          trophies: 0,
+          licenseId: existingLic?.id || "",
+          createdAt: Date.now(),
+        };
+        updated = [newPlayer, ...prev];
+      }
+      saveEsportPlayers(updated);
+      return updated;
+    });
 
     // Log action
     const newLog: EsportAuditLog = {
@@ -789,6 +842,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     });
     setRegistrations(updated);
     saveEsportRegistrations(updated);
+    onUpdateRegistrations?.(updated);
+    broadcastEsportEvent("update-registrations", updated);
     showToast("Inscription refusée.");
   };
 
@@ -798,6 +853,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     const updated = registrations.filter((r) => r.id !== regId);
     setRegistrations(updated);
     saveEsportRegistrations(updated);
+    onUpdateRegistrations?.(updated);
+    broadcastEsportEvent("update-registrations", updated);
     await deleteRegistrationCloud(regId);
     showToast("Inscription supprimée de la gestion E-Sport.");
   };
@@ -836,7 +893,10 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     saveEsportLicenses(updated);
 
     const target = updated.find((l) => l.id === licenseId);
-    if (target) saveLicenseCloud(target);
+    if (target) {
+      saveLicenseCloud(target);
+      broadcastEsportEvent("update-license", target);
+    }
 
     showToast(`Licence ${licenseId} désormais ${nextStatus.toUpperCase()}`);
   };
@@ -856,6 +916,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     const updatedLicenses = licenses.filter((l) => l.id !== lic.id);
     setLicenses(updatedLicenses);
     saveEsportLicenses(updatedLicenses);
+    broadcastEsportEvent("delete-license", lic.id);
 
     // 2. Remove from cloud (Firestore)
     try {

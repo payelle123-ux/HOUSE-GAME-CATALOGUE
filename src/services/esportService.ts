@@ -338,11 +338,19 @@ export function subscribeToEsportRegistrations(
           cloudItems.push({ ...data, id: d.id });
         });
 
-        // Smart merge with local storage so no local pending submissions are lost
+        // Smart merge with local storage: local validated status is preserved if newer
         const localItems = loadEsportRegistrations();
         const map = new Map<string, EsportRegistration>();
         localItems.forEach((r) => map.set(r.id, r));
-        cloudItems.forEach((r) => map.set(r.id, r));
+        cloudItems.forEach((r) => {
+          const existing = map.get(r.id);
+          // If locally already validated and cloud still has pending, preserve validation
+          if (existing && existing.status === "validée" && r.status === "en attente") {
+            map.set(r.id, { ...r, ...existing });
+          } else {
+            map.set(r.id, { ...(existing || {}), ...r });
+          }
+        });
 
         const merged = Array.from(map.values());
         merged.sort((a, b) => (b.registeredAt || 0) - (a.registeredAt || 0));
@@ -393,21 +401,33 @@ export function subscribeToEsportLicenses(
     colRef,
     (snapshot) => {
       try {
-        if (!snapshot.empty) {
-          const items: EsportLicense[] = [];
-          snapshot.forEach((d) => items.push({ ...(d.data() as EsportLicense), id: d.id }));
-          saveEsportLicenses(items);
-          onUpdate(items);
-        } else {
-          const cached = loadEsportLicenses();
-          onUpdate(cached);
-        }
+        const cloudItems: EsportLicense[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as EsportLicense;
+          cloudItems.push({ ...data, id: d.id });
+        });
+
+        // Smart merge with local licenses: NEVER discard locally issued licenses!
+        const localItems = loadEsportLicenses();
+        const map = new Map<string, EsportLicense>();
+        localItems.forEach((l) => map.set(l.id, l));
+        cloudItems.forEach((l) => {
+          const existing = map.get(l.id);
+          map.set(l.id, { ...(existing || {}), ...l });
+        });
+
+        const merged = Array.from(map.values());
+        saveEsportLicenses(merged);
+        onUpdate(merged);
       } catch (err) {
+        console.error("Licenses snapshot error:", err);
+        const cached = loadEsportLicenses();
+        onUpdate(cached);
         if (onError) onError(err);
       }
     },
     (err) => {
-      console.warn("Firestore licenses notice:", err);
+      console.warn("Firestore licenses notice (using local cache):", err);
       const cached = loadEsportLicenses();
       onUpdate(cached);
       if (onError) onError(err);
