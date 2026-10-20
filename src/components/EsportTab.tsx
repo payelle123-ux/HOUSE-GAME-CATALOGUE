@@ -99,6 +99,7 @@ import {
 } from "../services/esportService";
 import { sfx } from "../services/soundEffects";
 import { compressImage } from "../services/storage";
+import { saveTournamentCloud } from "../services/firebaseService";
 
 interface EsportTabProps {
   tournaments: Tournament[];
@@ -266,10 +267,18 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       const cleanParent = parentTournaments.filter(
         (t) => !["tourn-1", "tourn-2", "tourn-3", "tourn-4"].includes(t.id)
       );
-      setTournamentsList(cleanParent);
-      saveEsportTournaments(cleanParent);
+      setTournamentsList((prev) => {
+        const merged = cleanParent.map((pt) => {
+          const valCount = registrations.filter((r) => r.tournamentId === pt.id && r.status === "validée").length;
+          const prevItem = prev.find((p) => p.id === pt.id);
+          const computedSlots = Math.max(pt.currentSlots || 0, prevItem?.currentSlots || 0, valCount);
+          return { ...pt, currentSlots: computedSlots };
+        });
+        saveEsportTournaments(merged);
+        return merged;
+      });
     }
-  }, [parentTournaments]);
+  }, [parentTournaments, registrations]);
 
   // Filters for Tournaments
   const [searchQuery, setSearchQuery] = useState("");
@@ -607,8 +616,11 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       return;
     }
 
-    // Check capacity
-    const currentSlots = registeringTournament.currentSlots || 0;
+    // Check capacity based on validated registrations
+    const validatedCount = registrations.filter(
+      (r) => r.tournamentId === registeringTournament.id && r.status === "validée"
+    ).length;
+    const currentSlots = Math.max(registeringTournament.currentSlots || 0, validatedCount);
     const maxSlots = registeringTournament.maxSlots || 32;
     const isWaitlist = currentSlots >= maxSlots;
     const initialStatus: RegistrationStatus = isWaitlist ? "liste d'attente" : "en attente";
@@ -769,18 +781,30 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     onUpdateRegistrations?.(updatedRegs);
     broadcastEsportEvent("update-registrations", updatedRegs);
 
+    // Recalculate accurate validated count for this tournament
+    const nextValidatedCount = updatedRegs.filter(
+      (r) => r.tournamentId === reg.tournamentId && r.status === "validée"
+    ).length;
+
     // Update slots in tournament
     const updatedTournList = tournamentsList.map((t) => {
       if (t.id === reg.tournamentId) {
         return {
           ...t,
-          currentSlots: Math.min(t.maxSlots || 32, (t.currentSlots || 0) + 1),
+          currentSlots: nextValidatedCount,
         };
       }
       return t;
     });
     setTournamentsList(updatedTournList);
     saveEsportTournaments(updatedTournList);
+
+    const targetTourn = updatedTournList.find((t) => t.id === reg.tournamentId);
+    if (targetTourn) {
+      saveTournamentCloud(targetTourn).catch((err) =>
+        console.warn("saveTournamentCloud notice:", err)
+      );
+    }
 
     // Update or create player profile
     setPlayers((prev) => {
@@ -832,6 +856,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
 
   const handleRejectRegistration = (regId: string) => {
     sfx.playClick();
+    const targetReg = registrations.find((r) => r.id === regId);
     const updated = registrations.map((r) => {
       if (r.id === regId) {
         const rejected: EsportRegistration = { ...r, status: "refusée" as RegistrationStatus };
@@ -844,18 +869,49 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     saveEsportRegistrations(updated);
     onUpdateRegistrations?.(updated);
     broadcastEsportEvent("update-registrations", updated);
+
+    // Recalculate slots
+    if (targetReg) {
+      const nextCount = updated.filter(
+        (r) => r.tournamentId === targetReg.tournamentId && r.status === "validée"
+      ).length;
+      const updatedTournList = tournamentsList.map((t) =>
+        t.id === targetReg.tournamentId ? { ...t, currentSlots: nextCount } : t
+      );
+      setTournamentsList(updatedTournList);
+      saveEsportTournaments(updatedTournList);
+      const targetTourn = updatedTournList.find((t) => t.id === targetReg.tournamentId);
+      if (targetTourn) saveTournamentCloud(targetTourn).catch(() => {});
+    }
+
     showToast("Inscription refusée.");
   };
 
   const handleDeleteRegistration = async (regId: string) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer définitivement cette inscription ?")) return;
     sfx.playClick();
+    const targetReg = registrations.find((r) => r.id === regId);
     const updated = registrations.filter((r) => r.id !== regId);
     setRegistrations(updated);
     saveEsportRegistrations(updated);
     onUpdateRegistrations?.(updated);
     broadcastEsportEvent("update-registrations", updated);
     await deleteRegistrationCloud(regId);
+
+    // Recalculate slots
+    if (targetReg) {
+      const nextCount = updated.filter(
+        (r) => r.tournamentId === targetReg.tournamentId && r.status === "validée"
+      ).length;
+      const updatedTournList = tournamentsList.map((t) =>
+        t.id === targetReg.tournamentId ? { ...t, currentSlots: nextCount } : t
+      );
+      setTournamentsList(updatedTournList);
+      saveEsportTournaments(updatedTournList);
+      const targetTourn = updatedTournList.find((t) => t.id === targetReg.tournamentId);
+      if (targetTourn) saveTournamentCloud(targetTourn).catch(() => {});
+    }
+
     showToast("Inscription supprimée de la gestion E-Sport.");
   };
 
@@ -1493,11 +1549,19 @@ export const EsportTab: React.FC<EsportTabProps> = ({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredTournaments.map((t) => {
-                const currentSlots = t.currentSlots || 0;
+                const validatedCount = registrations.filter(
+                  (r) => r.tournamentId === t.id && r.status === "validée"
+                ).length;
+                const pendingCount = registrations.filter(
+                  (r) => r.tournamentId === t.id && r.status === "en attente"
+                ).length;
+                const currentSlots = Math.max(t.currentSlots || 0, validatedCount);
                 const maxSlots = t.maxSlots || 32;
-              const slotsPercent = Math.min(100, Math.round((currentSlots / maxSlots) * 100));
-              const isClosed = t.status === "Terminé" || t.status === "Suspendu";
-              const isOpen = t.status === "Inscriptions ouvertes";
+                const remainingSlots = Math.max(0, maxSlots - currentSlots);
+                const slotsPercent = Math.min(100, Math.round((currentSlots / maxSlots) * 100));
+                const isFull = currentSlots >= maxSlots;
+                const isClosed = t.status === "Terminé" || t.status === "Suspendu" || isFull;
+                const isOpen = t.status === "Inscriptions ouvertes" && !isFull;
 
               return (
                 <div
@@ -1609,15 +1673,34 @@ export const EsportTab: React.FC<EsportTabProps> = ({
 
                       {/* Slots Bar */}
                       <div className="space-y-1.5 font-['JetBrains_Mono'] text-xs">
-                        <div className="flex justify-between text-[11px] text-slate-400">
-                          <span>Places réservées :</span>
-                          <strong className="text-white">
-                            {currentSlots} / {maxSlots} joueurs
-                          </strong>
+                        <div className="flex justify-between items-center text-[11px] text-slate-400">
+                          <span className="flex items-center gap-1.5">
+                            <span>Places réservées :</span>
+                            {pendingCount > 0 && (
+                              <span
+                                title={`${pendingCount} inscription(s) en attente de validation`}
+                                className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-bold text-amber-300 animate-pulse"
+                              >
+                                +{pendingCount} en attente
+                              </span>
+                            )}
+                          </span>
+                          <div className="text-right">
+                            <strong className="text-emerald-400 font-bold">
+                              {currentSlots} / {maxSlots} joueurs
+                            </strong>
+                            <span className="text-slate-400 text-[10px] ml-1">
+                              ({remainingSlots} place{remainingSlots > 1 ? "s" : ""} restante{remainingSlots > 1 ? "s" : ""})
+                            </span>
+                          </div>
                         </div>
                         <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
                           <div
-                            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-[#00FF88] transition-all"
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              isFull
+                                ? "bg-gradient-to-r from-amber-500 to-rose-500"
+                                : "bg-gradient-to-r from-emerald-500 to-[#00FF88]"
+                            }`}
                             style={{ width: `${slotsPercent}%` }}
                           />
                         </div>
@@ -1634,7 +1717,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                         className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:from-emerald-500 hover:to-teal-500 transition active:scale-95 disabled:opacity-40"
                       >
                         <Trophy size={14} />
-                        <span>S'inscrire au tournoi</span>
+                        <span>{isFull ? "Tournoi complet" : "S'inscrire au tournoi"}</span>
                       </button>
 
                       {/* Share Tournament Button */}
@@ -2271,6 +2354,96 @@ export const EsportTab: React.FC<EsportTabProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Suivi en direct du remplissage des places par tournoi */}
+          {tournamentsList.length > 0 && (
+            <div className="rounded-3xl border border-emerald-500/30 bg-[#0E121B] p-6 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                <div>
+                  <h3 className="font-['Orbitron'] text-base font-bold text-white flex items-center gap-2">
+                    <Trophy size={16} className="text-amber-400" />
+                    <span>SUIVI EN TEMPS RÉEL DES PLACES RÉSERVÉES</span>
+                  </h3>
+                  <p className="font-['Chakra_Petch'] text-xs text-slate-400 mt-0.5">
+                    Le nombre de places prises s'incrémente automatiquement dès que vous validez une inscription et émettez sa licence.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-['JetBrains_Mono'] text-emerald-400">
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>Calcul dynamique certifié</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {tournamentsList.map((t) => {
+                  const valCount = registrations.filter(
+                    (r) => r.tournamentId === t.id && r.status === "validée"
+                  ).length;
+                  const pendCount = registrations.filter(
+                    (r) => r.tournamentId === t.id && r.status === "en attente"
+                  ).length;
+                  const taken = Math.max(t.currentSlots || 0, valCount);
+                  const max = t.maxSlots || 32;
+                  const pct = Math.min(100, Math.round((taken / max) * 100));
+                  const left = Math.max(0, max - taken);
+
+                  return (
+                    <div
+                      key={t.id}
+                      className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3 hover:border-emerald-500/40 transition"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold font-['JetBrains_Mono'] text-[#3E9BFF] block">
+                            {t.game}
+                          </span>
+                          <strong className="font-['Orbitron'] text-xs font-bold text-white line-clamp-1">
+                            {t.title}
+                          </strong>
+                        </div>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold font-['JetBrains_Mono'] ${
+                            taken >= max
+                              ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                              : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                          }`}
+                        >
+                          {taken >= max ? "COMPLET" : "OUVERT"}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 font-['JetBrains_Mono'] text-xs">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <span className="text-slate-400">Places prises (validées) :</span>
+                          <strong className="text-emerald-400 font-bold font-['Orbitron']">
+                            {taken} / {max}
+                          </strong>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              taken >= max
+                                ? "bg-gradient-to-r from-amber-500 to-rose-500"
+                                : "bg-gradient-to-r from-emerald-500 to-[#00FF88]"
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-slate-400 pt-0.5">
+                          <span className="text-slate-300 font-semibold">{left} place{left > 1 ? "s" : ""} libre{left > 1 ? "s" : ""}</span>
+                          {pendCount > 0 && (
+                            <span className="text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">
+                              {pendCount} en attente
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Registrations Management */}
           <div className="rounded-3xl border border-white/10 bg-[#0E121B] p-6 shadow-xl space-y-5">
