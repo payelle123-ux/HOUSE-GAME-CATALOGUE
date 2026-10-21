@@ -13,6 +13,7 @@ import {
   Edit2,
   Crown,
   Tv,
+  Trash2,
 } from "lucide-react";
 
 interface EsportBracketViewerProps {
@@ -21,6 +22,7 @@ interface EsportBracketViewerProps {
   isAdmin: boolean;
   onRecordScore: (matchId: string, s1: number, s2: number, isProvisional: boolean, referee: string) => void;
   onGenerateBracket?: () => void;
+  onDeleteBracket?: () => void;
   canGenerate?: boolean;
   validatedCount?: number;
 }
@@ -31,10 +33,12 @@ export const EsportBracketViewer: React.FC<EsportBracketViewerProps> = ({
   isAdmin,
   onRecordScore,
   onGenerateBracket,
+  onDeleteBracket,
   canGenerate = false,
   validatedCount = 0,
 }) => {
   const [editingMatch, setEditingMatch] = useState<EsportMatch | null>(null);
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState<boolean>(false);
   const [score1, setScore1] = useState<number>(0);
   const [score2, setScore2] = useState<number>(0);
   const [isProvisional, setIsProvisional] = useState<boolean>(false);
@@ -86,15 +90,49 @@ export const EsportBracketViewer: React.FC<EsportBracketViewerProps> = ({
           </p>
         </div>
 
-        {isAdmin && onGenerateBracket && tournamentMatches.length === 0 && (
-          <button
-            onClick={onGenerateBracket}
-            disabled={!canGenerate}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:from-emerald-500 hover:to-teal-500 transition active:scale-95 disabled:opacity-40"
-          >
-            <Sparkles size={14} />
-            <span>Générer l'arbre officiel ({validatedCount} joueurs validés)</span>
-          </button>
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-2">
+            {tournamentMatches.length === 0 ? (
+              onGenerateBracket && (
+                <button
+                  type="button"
+                  onClick={onGenerateBracket}
+                  disabled={!canGenerate}
+                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:from-emerald-500 hover:to-teal-500 transition active:scale-95 disabled:opacity-40"
+                >
+                  <Sparkles size={14} />
+                  <span>Générer l'arbre officiel ({validatedCount} joueurs validés)</span>
+                </button>
+              )
+            ) : (
+              <>
+                {onGenerateBracket && (
+                  <button
+                    type="button"
+                    onClick={onGenerateBracket}
+                    disabled={!canGenerate}
+                    className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-emerald-300 transition active:scale-95 disabled:opacity-40"
+                    title="Régénérer un nouveau tirage de l'arbre des matchs"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Régénérer l'arbre</span>
+                  </button>
+                )}
+
+                {onDeleteBracket && (
+                  <button
+                    type="button"
+                    onClick={() => setIsConfirmDeleteOpen(true)}
+                    className="flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-rose-300 transition active:scale-95"
+                    title="Supprimer définitivement cet arbre de match pour en générer un autre"
+                  >
+                    <Trash2 size={13} />
+                    <span>Supprimer l'arbre</span>
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         )}
       </div>
 
@@ -355,6 +393,68 @@ export const EsportBracketViewer: React.FC<EsportBracketViewerProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal: Delete Tournament Bracket */}
+      {isConfirmDeleteOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fadeIn"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setIsConfirmDeleteOpen(false);
+          }}
+        >
+          <div className="relative w-full max-w-md rounded-3xl border border-rose-500/40 bg-[#0E131E] p-6 sm:p-7 shadow-2xl space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/10 text-rose-400">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="font-['Orbitron'] text-base font-bold text-white">
+                  SUPPRIMER L'ARBRE DE MATCH
+                </h3>
+                <p className="font-['JetBrains_Mono'] text-xs text-rose-400 font-bold truncate max-w-[280px]">
+                  {tournament.title}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-2 text-xs font-['JetBrains_Mono'] text-slate-300">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Matchs à supprimer :</span>
+                <span className="font-bold text-white">{tournamentMatches.length} match(s)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Format :</span>
+                <span className="text-emerald-400">{tournament.format}</span>
+              </div>
+            </div>
+
+            <p className="font-['Chakra_Petch'] text-xs text-slate-400 leading-relaxed">
+              Voulez-vous supprimer l'arbre actuel pour ce tournoi ? Tous les matchs générés et scores enregistrés seront réinitialisés. Vous pourrez immédiatement générer un nouvel arbre avec les joueurs validés.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setIsConfirmDeleteOpen(false)}
+                className="rounded-xl px-4 py-2 font-['JetBrains_Mono'] text-xs text-slate-400 hover:text-white transition"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsConfirmDeleteOpen(false);
+                  onDeleteBracket?.();
+                }}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 px-5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] transition active:scale-95"
+              >
+                <Trash2 size={13} />
+                <span>Supprimer l'arbre</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

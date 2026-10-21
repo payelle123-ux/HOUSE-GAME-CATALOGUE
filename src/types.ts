@@ -168,6 +168,7 @@ export interface EsportRegistration {
 }
 
 export type LicenseStatus = "Active" | "Suspendue" | "Expirée";
+export type LicenseRankLevel = "Rookie" | "Challenger" | "Pro" | "Élite" | "Master";
 
 export interface EsportLicense {
   id: string; // e.g. "HGE-2026-8492"
@@ -180,7 +181,7 @@ export interface EsportLicense {
   issuedAt: string;
   expiresAt: string;
   status: LicenseStatus;
-  rankLevel: "Rookie" | "Challenger" | "Pro" | "Élite" | "Master";
+  rankLevel: LicenseRankLevel;
   gameSpecialties: string[];
   totalPoints: number;
 }

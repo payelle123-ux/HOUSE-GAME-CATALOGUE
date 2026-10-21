@@ -14,6 +14,7 @@ import {
   Calendar,
   Gamepad2,
   Trash2,
+  Edit3,
 } from "lucide-react";
 import { generateSvgQrDataUri } from "../services/esportService";
 
@@ -22,6 +23,7 @@ interface EsportDigitalLicenseCardProps {
   showActions?: boolean;
   onVerifyClick?: () => void;
   customLogoUrl?: string;
+  onEdit?: () => void;
   onDelete?: () => void;
 }
 
@@ -30,6 +32,7 @@ export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> =
   showActions = true,
   onVerifyClick,
   customLogoUrl,
+  onEdit,
   onDelete,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -358,6 +361,18 @@ export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> =
             >
               <QrCode size={14} className="text-emerald-400" />
               <span>Vérifier</span>
+            </button>
+          )}
+
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              title="Modifier les informations de la licence"
+              className="flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-4 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-amber-300 transition active:scale-95"
+            >
+              <Edit3 size={14} />
+              <span>Modifier</span>
             </button>
           )}
 

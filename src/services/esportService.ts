@@ -496,6 +496,15 @@ export async function saveMatchCloud(match: EsportMatch): Promise<void> {
   }
 }
 
+export async function deleteMatchCloud(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, COLL_MATCHES, id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn("Firestore deleteMatchCloud fallback:", err);
+  }
+}
+
 // ==================== ENGINE & BUSINESS LOGIC ====================
 
 /**
@@ -784,14 +793,14 @@ export function generateTournamentMatches(
 /**
  * Exports data to CSV string with standard UTF-8 BOM
  */
-export function exportToCsv(data: Record<string, unknown>[], filename: string): void {
+export function exportToCsv<T extends object>(data: T[], filename: string): void {
   if (!data || data.length === 0) return;
 
-  const headers = Object.keys(data[0]);
+  const headers = Object.keys(data[0]) as (keyof T)[];
   const rows = data.map((obj) =>
     headers
       .map((header) => {
-        const val = obj[header];
+        const val = (obj as Record<string, unknown>)[header as string];
         const stringVal = val === null || val === undefined ? "" : String(val);
         const escaped = stringVal.replace(/"/g, '""');
         return `"${escaped}"`;

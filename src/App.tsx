@@ -112,6 +112,7 @@ import { EventsTab } from "./components/EventsTab";
 import { EsportTab } from "./components/EsportTab";
 import { CustomTabContent } from "./components/CustomTabContent";
 import { AiGameMaster } from "./components/AiGameMaster";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Extended Admin Modals
 import {
@@ -1290,29 +1291,31 @@ export default function App() {
 
         {/* ESPORT & TOURNOIS (Accès direct) */}
         {activeTab === "esport" && (
-          <EsportTab
-            tournaments={tournaments}
-            shopInfo={shopInfo}
-            isAdmin={isAdmin}
-            registrations={esportRegistrations}
-            onUpdateRegistrations={(regs) => {
-              setEsportRegistrations(regs);
-              saveEsportRegistrations(regs);
-            }}
-            targetTournamentId={targetTournamentId}
-            onClearTargetTournament={() => setTargetTournamentId(null)}
-            initialSubView={esportInitialSubView}
-            onSubViewChange={(v) => setEsportInitialSubView(v as any)}
-            onOpenAddTournament={() => {
-              setEditingTournament(null);
-              setIsTournamentModalOpen(true);
-            }}
-            onEditTournament={(t) => {
-              setEditingTournament(t);
-              setIsTournamentModalOpen(true);
-            }}
-            onDeleteTournament={(t) => setTournamentToDelete(t)}
-          />
+          <ErrorBoundary fallbackTitle="Module E-Sport temporairement indisponible">
+            <EsportTab
+              tournaments={tournaments}
+              shopInfo={shopInfo}
+              isAdmin={isAdmin}
+              registrations={esportRegistrations}
+              onUpdateRegistrations={(regs) => {
+                setEsportRegistrations(regs);
+                saveEsportRegistrations(regs);
+              }}
+              targetTournamentId={targetTournamentId}
+              onClearTargetTournament={() => setTargetTournamentId(null)}
+              initialSubView={esportInitialSubView}
+              onSubViewChange={(v) => setEsportInitialSubView(v as any)}
+              onOpenAddTournament={() => {
+                setEditingTournament(null);
+                setIsTournamentModalOpen(true);
+              }}
+              onEditTournament={(t) => {
+                setEditingTournament(t);
+                setIsTournamentModalOpen(true);
+              }}
+              onDeleteTournament={(t) => setTournamentToDelete(t)}
+            />
+          </ErrorBoundary>
         )}
 
         {/* DYNAMIC CUSTOM TABS */}

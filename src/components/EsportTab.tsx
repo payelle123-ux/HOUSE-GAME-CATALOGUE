@@ -9,6 +9,7 @@ import {
   EsportAuditLog,
   RegistrationStatus,
   LicenseStatus,
+  LicenseRankLevel,
 } from "../types";
 import {
   Trophy,
@@ -76,6 +77,7 @@ import {
   loadEsportMatches,
   saveEsportMatches,
   saveMatchCloud,
+  deleteMatchCloud,
   subscribeToEsportMatches,
   loadEsportPlayers,
   saveEsportPlayers,
@@ -280,6 +282,84 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     }
   }, [parentTournaments, registrations]);
 
+  // Auto-reconcile validated registrations with official licenses:
+  // If any player is registered with status "validée" (e.g. Naruto Esport Ranking),
+  // guarantee an active official House Game ID license exists and is displayed in "Licences & Vérifications".
+  useEffect(() => {
+    const validatedRegs = registrations.filter((r) => r.status === "validée");
+    if (validatedRegs.length === 0) return;
+
+    let hasNew = false;
+    const currentLicenses = [...licenses];
+    const newLicsToSave: EsportLicense[] = [];
+    let regsModified = false;
+    const updatedRegs = [...registrations];
+
+    validatedRegs.forEach((reg) => {
+      const match = currentLicenses.find((l) => {
+        if (reg.licenseId && l.id === reg.licenseId) return true;
+        if (l.playerId && reg.playerId && l.playerId.trim() === reg.playerId.trim()) return true;
+        if (l.gamerTag && reg.gamerTag && l.gamerTag.trim().toLowerCase() === reg.gamerTag.trim().toLowerCase()) return true;
+        return false;
+      });
+
+      if (!match) {
+        hasNew = true;
+        const newId = reg.licenseId || generateLicenseNumber();
+        const issuedStr = new Date(reg.registeredAt || Date.now()).toLocaleDateString("fr-FR", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        });
+        const expiresStr = new Date((reg.registeredAt || Date.now()) + 86400000 * 365).toLocaleDateString(
+          "fr-FR",
+          { day: "2-digit", month: "long", year: "numeric" }
+        );
+
+        const newLic: EsportLicense = {
+          id: newId,
+          playerId: reg.playerId || `HGP-${Math.floor(1000 + Math.random() * 9000)}`,
+          gamerTag: reg.gamerTag || "Joueur",
+          fullName: reg.fullName || reg.gamerTag || "Compétiteur Officiel",
+          phoneMasked: maskPhoneNumber(reg.phone || ""),
+          photoUrl: reg.photoUrl,
+          qrCodeData: `https://house-game-sarl.vercel.app/?tab=esport&license=${newId}`,
+          issuedAt: issuedStr,
+          expiresAt: expiresStr,
+          status: "Active",
+          rankLevel: "Challenger",
+          gameSpecialties: [reg.game || "Tournoi E-Sport HG"],
+          totalPoints: 100,
+        };
+
+        newLicsToSave.push(newLic);
+        currentLicenses.unshift(newLic);
+
+        // Also update registration with its licenseId
+        const regIdx = updatedRegs.findIndex((r) => r.id === reg.id);
+        if (regIdx !== -1 && !updatedRegs[regIdx].licenseId) {
+          updatedRegs[regIdx] = { ...updatedRegs[regIdx], licenseId: newId };
+          regsModified = true;
+          saveRegistrationCloud(updatedRegs[regIdx]);
+        }
+      }
+    });
+
+    if (hasNew && newLicsToSave.length > 0) {
+      setLicenses(currentLicenses);
+      saveEsportLicenses(currentLicenses);
+      newLicsToSave.forEach((lic) => {
+        saveLicenseCloud(lic);
+        broadcastEsportEvent("new-license", lic);
+      });
+      if (regsModified) {
+        setRegistrations(updatedRegs);
+        saveEsportRegistrations(updatedRegs);
+        onUpdateRegistrations?.(updatedRegs);
+      }
+    }
+  }, [registrations, licenses, onUpdateRegistrations]);
+
   // Filters for Tournaments
   const [searchQuery, setSearchQuery] = useState("");
   const [gameFilter, setGameFilter] = useState("Tous");
@@ -414,6 +494,33 @@ export const EsportTab: React.FC<EsportTabProps> = ({
 
   // License Deletion Confirmation State
   const [licenseToDelete, setLicenseToDelete] = useState<EsportLicense | null>(null);
+
+  // Registration Deletion Confirmation State (replaces window.confirm)
+  const [registrationToDelete, setRegistrationToDelete] = useState<EsportRegistration | null>(null);
+
+  // Registration Editing Modal State (Allow admin to modify player information)
+  const [editingRegistration, setEditingRegistration] = useState<EsportRegistration | null>(null);
+  const [editRegGamerTag, setEditRegGamerTag] = useState("");
+  const [editRegFullName, setEditRegFullName] = useState("");
+  const [editRegPhone, setEditRegPhone] = useState("");
+  const [editRegEmail, setEditRegEmail] = useState("");
+  const [editRegPlatform, setEditRegPlatform] = useState("PlayStation 5");
+  const [editRegGame, setEditRegGame] = useState("");
+  const [editRegStatus, setEditRegStatus] = useState<RegistrationStatus>("en attente");
+  const [editRegPhotoUrl, setEditRegPhotoUrl] = useState("");
+
+  // License Editing Modal State
+  const [editingLicense, setEditingLicense] = useState<EsportLicense | null>(null);
+  const [editLicGamerTag, setEditLicGamerTag] = useState("");
+  const [editLicFullName, setEditLicFullName] = useState("");
+  const [editLicRankLevel, setEditLicRankLevel] = useState<LicenseRankLevel>("Challenger");
+  const [editLicStatus, setEditLicStatus] = useState<LicenseStatus>("Active");
+  const [editLicExpiresAt, setEditLicExpiresAt] = useState("");
+  const [editLicPoints, setEditLicPoints] = useState(100);
+  const [editLicSpecialties, setEditLicSpecialties] = useState("");
+
+  // Clear All Esport Confirmation Modal State
+  const [isClearAllModalOpen, setIsClearAllModalOpen] = useState<boolean>(false);
 
   // License Public Verification
   const [verificationQuery, setVerificationQuery] = useState("");
@@ -887,43 +994,283 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     showToast("Inscription refusée.");
   };
 
-  const handleDeleteRegistration = async (regId: string) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer définitivement cette inscription ?")) return;
+  // Registration Delete Handlers (replaces window.confirm to prevent iframe crash)
+  const handleRequestDeleteRegistration = (reg: EsportRegistration) => {
     sfx.playClick();
-    const targetReg = registrations.find((r) => r.id === regId);
-    const updated = registrations.filter((r) => r.id !== regId);
-    setRegistrations(updated);
-    saveEsportRegistrations(updated);
-    onUpdateRegistrations?.(updated);
-    broadcastEsportEvent("update-registrations", updated);
-    await deleteRegistrationCloud(regId);
+    setRegistrationToDelete(reg);
+  };
 
-    // Recalculate slots
-    if (targetReg) {
+  const handleConfirmDeleteRegistration = async () => {
+    if (!registrationToDelete) return;
+    const reg = registrationToDelete;
+    sfx.playClick();
+    try {
+      const updated = registrations.filter((r) => r.id !== reg.id);
+      setRegistrations(updated);
+      saveEsportRegistrations(updated);
+      onUpdateRegistrations?.(updated);
+      broadcastEsportEvent("update-registrations", updated);
+      await deleteRegistrationCloud(reg.id);
+
+      // Recalculate slots
       const nextCount = updated.filter(
-        (r) => r.tournamentId === targetReg.tournamentId && r.status === "validée"
+        (r) => r.tournamentId === reg.tournamentId && r.status === "validée"
       ).length;
       const updatedTournList = tournamentsList.map((t) =>
-        t.id === targetReg.tournamentId ? { ...t, currentSlots: nextCount } : t
+        t.id === reg.tournamentId ? { ...t, currentSlots: nextCount } : t
       );
       setTournamentsList(updatedTournList);
       saveEsportTournaments(updatedTournList);
-      const targetTourn = updatedTournList.find((t) => t.id === targetReg.tournamentId);
+      const targetTourn = updatedTournList.find((t) => t.id === reg.tournamentId);
       if (targetTourn) saveTournamentCloud(targetTourn).catch(() => {});
-    }
 
-    showToast("Inscription supprimée de la gestion E-Sport.");
+      showToast(`Inscription de ${reg.gamerTag} supprimée avec succès.`);
+    } catch (err) {
+      console.warn("Delete registration error:", err);
+      showToast("Erreur lors de la suppression de l'inscription.");
+    } finally {
+      setRegistrationToDelete(null);
+    }
   };
 
-  // Clear All Esport Data
-  const handleClearAllEsportData = () => {
-    if (
-      !window.confirm(
-        "Voulez-vous supprimer tous les tournois, inscriptions, licences, matchs et scores ? Tout le module E-Sport sera réinitialisé à vide."
-      )
-    ) {
-      return;
+  // Open Edit Registration Modal
+  const handleOpenEditRegistration = (reg: EsportRegistration) => {
+    sfx.playClick();
+    setEditingRegistration(reg);
+    setEditRegGamerTag(reg.gamerTag || "");
+    setEditRegFullName(reg.fullName || "");
+    setEditRegPhone(reg.phone || "");
+    setEditRegEmail(reg.email || "");
+    setEditRegPlatform(reg.platform || "PlayStation 5");
+    setEditRegGame(reg.game || "");
+    setEditRegStatus(reg.status || "en attente");
+    setEditRegPhotoUrl(reg.photoUrl || "");
+  };
+
+  // Save Modified Player / Registration Information
+  const handleSaveEditRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRegistration) return;
+    sfx.playSuccess();
+
+    const oldTag = editingRegistration.gamerTag;
+    const oldPlayerId = editingRegistration.playerId;
+    const oldLicenseId = editingRegistration.licenseId;
+
+    const updatedReg: EsportRegistration = {
+      ...editingRegistration,
+      gamerTag: editRegGamerTag.trim() || editingRegistration.gamerTag,
+      fullName: editRegFullName.trim() || editingRegistration.fullName,
+      phone: editRegPhone.trim() || editingRegistration.phone,
+      email: editRegEmail.trim() || editingRegistration.email,
+      platform: editRegPlatform,
+      game: editRegGame.trim() || editingRegistration.game,
+      status: editRegStatus,
+      photoUrl: editRegPhotoUrl.trim() || editingRegistration.photoUrl,
+    };
+
+    // 1. Update registrations in state and persist
+    const updatedRegs = registrations.map((r) => (r.id === updatedReg.id ? updatedReg : r));
+    setRegistrations(updatedRegs);
+    saveEsportRegistrations(updatedRegs);
+    onUpdateRegistrations?.(updatedRegs);
+    saveRegistrationCloud(updatedReg);
+    broadcastEsportEvent("update-registration", updatedReg);
+    broadcastEsportEvent("update-registrations", updatedRegs);
+
+    // 2. Synchronize license if exists or emit if status is validée
+    let updatedLics = [...licenses];
+    const licIndex = updatedLics.findIndex(
+      (l) =>
+        (oldLicenseId && l.id === oldLicenseId) ||
+        l.playerId === oldPlayerId ||
+        l.gamerTag.trim().toLowerCase() === oldTag.trim().toLowerCase()
+    );
+
+    if (licIndex !== -1) {
+      const oldLic = updatedLics[licIndex];
+      const updatedLic: EsportLicense = {
+        ...oldLic,
+        gamerTag: updatedReg.gamerTag,
+        fullName: updatedReg.fullName,
+        phoneMasked: maskPhoneNumber(updatedReg.phone),
+        photoUrl: updatedReg.photoUrl || oldLic.photoUrl,
+        gameSpecialties: oldLic.gameSpecialties.includes(updatedReg.game)
+          ? oldLic.gameSpecialties
+          : [...oldLic.gameSpecialties, updatedReg.game],
+      };
+      updatedLics[licIndex] = updatedLic;
+      setLicenses(updatedLics);
+      saveEsportLicenses(updatedLics);
+      saveLicenseCloud(updatedLic);
+      broadcastEsportEvent("update-license", updatedLic);
+    } else if (updatedReg.status === "validée") {
+      const newLicenseId = generateLicenseNumber();
+      const newLic: EsportLicense = {
+        id: newLicenseId,
+        playerId: updatedReg.playerId,
+        gamerTag: updatedReg.gamerTag,
+        fullName: updatedReg.fullName,
+        phoneMasked: maskPhoneNumber(updatedReg.phone),
+        photoUrl: updatedReg.photoUrl,
+        qrCodeData: `https://house-game-sarl.vercel.app/?tab=esport&license=${newLicenseId}`,
+        issuedAt: new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }),
+        expiresAt: new Date(Date.now() + 86400000 * 365).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }),
+        status: "Active",
+        rankLevel: "Challenger",
+        gameSpecialties: [updatedReg.game || "Tournoi E-Sport"],
+        totalPoints: 100,
+      };
+      updatedLics = [newLic, ...updatedLics];
+      setLicenses(updatedLics);
+      saveEsportLicenses(updatedLics);
+      saveLicenseCloud(newLic);
+      broadcastEsportEvent("new-license", newLic);
     }
+
+    // 3. Update player profile in leaderboard
+    setPlayers((prev) => {
+      const idx = prev.findIndex(
+        (p) => p.id === oldPlayerId || p.gamerTag.trim().toLowerCase() === oldTag.trim().toLowerCase()
+      );
+      if (idx !== -1) {
+        const updatedList = [...prev];
+        updatedList[idx] = {
+          ...updatedList[idx],
+          gamerTag: updatedReg.gamerTag,
+          fullName: updatedReg.fullName,
+          phone: updatedReg.phone,
+          email: updatedReg.email,
+          platform: updatedReg.platform,
+          favoriteGame: updatedReg.game,
+          photoUrl: updatedReg.photoUrl || updatedList[idx].photoUrl,
+        };
+        saveEsportPlayers(updatedList);
+        return updatedList;
+      }
+      return prev;
+    });
+
+    // 4. Update any matches with this player tag
+    setMatches((prev) => {
+      const updatedM = prev.map((m) => {
+        let changed = false;
+        let p1Tag = m.player1Tag;
+        let p2Tag = m.player2Tag;
+        if (m.player1Tag === oldTag || m.player1Id === oldPlayerId) {
+          p1Tag = updatedReg.gamerTag;
+          changed = true;
+        }
+        if (m.player2Tag === oldTag || m.player2Id === oldPlayerId) {
+          p2Tag = updatedReg.gamerTag;
+          changed = true;
+        }
+        if (changed) {
+          const mod = { ...m, player1Tag: p1Tag, player2Tag: p2Tag };
+          saveMatchCloud(mod);
+          return mod;
+        }
+        return m;
+      });
+      saveEsportMatches(updatedM);
+      return updatedM;
+    });
+
+    // 5. Recalculate tournament slots
+    const nextCount = updatedRegs.filter(
+      (r) => r.tournamentId === updatedReg.tournamentId && r.status === "validée"
+    ).length;
+    const updatedTournList = tournamentsList.map((t) =>
+      t.id === updatedReg.tournamentId ? { ...t, currentSlots: nextCount } : t
+    );
+    setTournamentsList(updatedTournList);
+    saveEsportTournaments(updatedTournList);
+    const targetTourn = updatedTournList.find((t) => t.id === updatedReg.tournamentId);
+    if (targetTourn) saveTournamentCloud(targetTourn).catch(() => {});
+
+    // 6. Log audit action
+    const newLog: EsportAuditLog = {
+      id: `log-${Date.now()}`,
+      action: "Modification d'informations joueur",
+      actor: "Direction Esport HG",
+      targetId: updatedReg.id,
+      targetType: "joueur",
+      details: `Coordonnées du joueur ${updatedReg.gamerTag} (${updatedReg.fullName}) modifiées et synchronisées.`,
+      timestamp: Date.now(),
+    };
+    const updatedLogs = [newLog, ...logs];
+    setLogs(updatedLogs);
+    saveEsportLogs(updatedLogs);
+
+    showToast(`Informations de ${updatedReg.gamerTag} modifiées avec succès !`);
+    setEditingRegistration(null);
+  };
+
+  // Open Edit License Modal
+  const handleOpenEditLicense = (lic: EsportLicense) => {
+    sfx.playClick();
+    setEditingLicense(lic);
+    setEditLicGamerTag(lic.gamerTag);
+    setEditLicFullName(lic.fullName);
+    setEditLicRankLevel(lic.rankLevel);
+    setEditLicStatus(lic.status);
+    setEditLicExpiresAt(lic.expiresAt);
+    setEditLicPoints(lic.totalPoints || 100);
+    setEditLicSpecialties(lic.gameSpecialties.join(", "));
+  };
+
+  // Save Modified License Information
+  const handleSaveEditLicense = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLicense) return;
+    sfx.playSuccess();
+
+    const specialties = editLicSpecialties
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const updatedLic: EsportLicense = {
+      ...editingLicense,
+      gamerTag: editLicGamerTag.trim() || editingLicense.gamerTag,
+      fullName: editLicFullName.trim() || editingLicense.fullName,
+      rankLevel: editLicRankLevel,
+      status: editLicStatus,
+      expiresAt: editLicExpiresAt.trim() || editingLicense.expiresAt,
+      totalPoints: Number(editLicPoints) || editingLicense.totalPoints || 100,
+      gameSpecialties: specialties.length > 0 ? specialties : editingLicense.gameSpecialties,
+    };
+
+    const updatedLics = licenses.map((l) => (l.id === updatedLic.id ? updatedLic : l));
+    setLicenses(updatedLics);
+    saveEsportLicenses(updatedLics);
+    saveLicenseCloud(updatedLic);
+    broadcastEsportEvent("update-license", updatedLic);
+
+    // Sync matching registrations
+    const updatedRegs = registrations.map((r) => {
+      if (r.licenseId === updatedLic.id || r.playerId === updatedLic.playerId) {
+        const u = { ...r, gamerTag: updatedLic.gamerTag, fullName: updatedLic.fullName };
+        saveRegistrationCloud(u);
+        return u;
+      }
+      return r;
+    });
+    setRegistrations(updatedRegs);
+    saveEsportRegistrations(updatedRegs);
+    onUpdateRegistrations?.(updatedRegs);
+
+    showToast(`Licence ${updatedLic.id} (${updatedLic.gamerTag}) mise à jour !`);
+    setEditingLicense(null);
+  };
+
+  // Clear All Esport Data Handlers
+  const handleRequestClearAllEsportData = () => {
+    sfx.playClick();
+    setIsClearAllModalOpen(true);
+  };
+
+  const handleConfirmClearAllEsportData = () => {
     sfx.playClick();
     setTournamentsList([]);
     saveEsportTournaments([]);
@@ -938,6 +1285,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     setLogs([]);
     saveEsportLogs([]);
     clearAllEsportStorage();
+    setIsClearAllModalOpen(false);
     showToast("Toute la section e-sport a été vidée avec succès !");
   };
 
@@ -1050,6 +1398,36 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     } catch (err: any) {
       showToast(err.message || "Erreur lors de la génération du tableau.");
     }
+  };
+
+  // Delete Tournament Match Tree / Bracket
+  const handleDeleteBracket = async (tournamentId: string) => {
+    sfx.playClick();
+    const tournamentMatches = matches.filter((m) => m.tournamentId === tournamentId);
+    const remainingMatches = matches.filter((m) => m.tournamentId !== tournamentId);
+    setMatches(remainingMatches);
+    saveEsportMatches(remainingMatches);
+
+    // Delete in cloud
+    for (const m of tournamentMatches) {
+      await deleteMatchCloud(m.id);
+    }
+
+    const targetTourn = tournamentsList.find((t) => t.id === tournamentId);
+    const newLog: EsportAuditLog = {
+      id: `log-${Date.now()}`,
+      action: "Suppression de l'arbre des matchs",
+      actor: "Staff Esport HG",
+      targetId: tournamentId,
+      targetType: "tournoi",
+      details: `Suppression de l'arbre de match (${tournamentMatches.length} matchs) pour le tournoi ${targetTourn?.title || tournamentId}. Prêt pour nouveau tirage.`,
+      timestamp: Date.now(),
+    };
+    const updatedLogs = [newLog, ...logs];
+    setLogs(updatedLogs);
+    saveEsportLogs(updatedLogs);
+
+    showToast("Arbre des matchs supprimé avec succès ! Vous pouvez maintenant en générer un nouveau.");
   };
 
   // Record Match Score & Advance Winner
@@ -1989,6 +2367,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                     isAdmin={isAdmin}
                     onRecordScore={handleRecordScore}
                     onGenerateBracket={() => handleGenerateBracket(selectedBracketTournament)}
+                    onDeleteBracket={() => handleDeleteBracket(selectedBracketTournament.id)}
                     canGenerate={registrations.filter((r) => r.tournamentId === selectedBracketTournament.id && r.status === "validée").length >= 2}
                     validatedCount={registrations.filter((r) => r.tournamentId === selectedBracketTournament.id && r.status === "validée").length}
                   />
@@ -2345,7 +2724,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                 <span>Export Licences (CSV)</span>
               </button>
               <button
-                onClick={handleClearAllEsportData}
+                type="button"
+                onClick={handleRequestClearAllEsportData}
                 title="Supprimer tous les tournois et données esport pour repartir de zéro"
                 className="flex items-center gap-1.5 rounded-xl border border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-rose-300 transition"
               >
@@ -2608,7 +2988,14 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                   <tbody className="divide-y divide-white/5">
                     {registrations
                       .filter((r) => adminRegFilter === "all" || r.status === adminRegFilter)
-                      .map((r) => (
+                      .map((r) => {
+                        const matchingLic = licenses.find(
+                          (l) =>
+                            (r.licenseId && l.id === r.licenseId) ||
+                            l.playerId === r.playerId ||
+                            l.gamerTag.trim().toLowerCase() === r.gamerTag.trim().toLowerCase()
+                        );
+                        return (
                         <tr key={r.id} className="hover:bg-white/[0.02] transition">
                           <td className="py-3 px-3 font-bold text-slate-400">{r.id}</td>
                           <td className="py-3 px-3">
@@ -2633,17 +3020,29 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                             </div>
                           </td>
                           <td className="py-3 px-3">
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                                r.status === "validée"
-                                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                  : r.status === "en attente"
-                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                  : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                              }`}
-                            >
-                              {r.status.toUpperCase()}
-                            </span>
+                            <div className="flex flex-col items-start gap-1">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                  r.status === "validée"
+                                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                    : r.status === "en attente"
+                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                    : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                }`}
+                              >
+                                {r.status.toUpperCase()}
+                              </span>
+                              {matchingLic ? (
+                                <span className="text-[10px] text-emerald-300 font-['Orbitron'] font-semibold flex items-center gap-1">
+                                  <ShieldCheck size={11} className="text-emerald-400 shrink-0" />
+                                  <span>{matchingLic.id}</span>
+                                </span>
+                              ) : r.status === "validée" ? (
+                                <span className="text-[10px] text-amber-300 font-['JetBrains_Mono']">
+                                  Licence certifiée
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="py-3 px-3 text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -2667,7 +3066,16 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                               )}
                               <button
                                 type="button"
-                                onClick={() => handleDeleteRegistration(r.id)}
+                                onClick={() => handleOpenEditRegistration(r)}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-[11px] font-bold transition active:scale-95"
+                                title="Modifier les coordonnées du joueur (pseudo, nom, tél, statut, photo...)"
+                              >
+                                <Edit3 size={12} />
+                                <span>Modifier</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRequestDeleteRegistration(r)}
                                 className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
                                 title="Supprimer définitivement l'inscription"
                               >
@@ -2676,7 +3084,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -2730,6 +3139,15 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                         </td>
                         <td className="py-3 px-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditLicense(lic)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-[11px] font-bold text-amber-300 hover:bg-amber-500/20 transition active:scale-95"
+                              title="Modifier les informations de la licence (pseudo, nom, rang, points, expiration...)"
+                            >
+                              <Edit3 size={11} />
+                              <span>Modifier</span>
+                            </button>
                             <button
                               onClick={() => handleToggleLicenseStatus(lic.id, lic.status)}
                               className="px-2.5 py-1 rounded-lg border border-white/10 text-[11px] text-slate-300 hover:text-white hover:bg-white/5 transition"
@@ -3531,6 +3949,471 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                 <span>Confirmer la suppression</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL : CONFIRMATION SUPPRESSION INSCRIPTION                               */}
+      {/* ========================================================================= */}
+      {registrationToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fadeIn"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setRegistrationToDelete(null);
+          }}
+        >
+          <div className="relative w-full max-w-md rounded-3xl border border-rose-500/40 bg-[#0E131E] p-6 sm:p-7 shadow-2xl space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/10 text-rose-400">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="font-['Orbitron'] text-base font-bold text-white">
+                  SUPPRIMER L'INSCRIPTION
+                </h3>
+                <p className="font-['JetBrains_Mono'] text-xs text-rose-400 font-bold">
+                  {registrationToDelete.gamerTag}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-xs font-['JetBrains_Mono']">
+              <div className="flex justify-between py-1 border-b border-white/5">
+                <span className="text-slate-400">Joueur :</span>
+                <strong className="text-white">{registrationToDelete.fullName}</strong>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/5">
+                <span className="text-slate-400">Tournoi :</span>
+                <span className="text-emerald-400 font-bold truncate max-w-[200px]">{registrationToDelete.tournamentTitle}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/5">
+                <span className="text-slate-400">Contact :</span>
+                <span className="text-slate-300">{registrationToDelete.phone}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400">Statut :</span>
+                <span className="text-amber-400 uppercase font-bold">{registrationToDelete.status}</span>
+              </div>
+            </div>
+
+            <p className="font-['Chakra_Petch'] text-xs text-slate-300 leading-relaxed">
+              Êtes-vous sûr de vouloir supprimer définitivement cette inscription ? Le joueur sera retiré de la liste des participants et la place réservée sera libérée dans le tournoi.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRegistrationToDelete(null)}
+                className="rounded-xl px-4 py-2 font-['JetBrains_Mono'] text-xs text-slate-400 hover:text-white transition"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteRegistration}
+                className="flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 px-5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] transition active:scale-95"
+              >
+                <Trash2 size={13} />
+                <span>Confirmer la suppression</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL : CONFIRMATION RÉINITIALISATION TOTALE E-SPORT                      */}
+      {/* ========================================================================= */}
+      {isClearAllModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fadeIn"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setIsClearAllModalOpen(false);
+          }}
+        >
+          <div className="relative w-full max-w-md rounded-3xl border border-rose-500/40 bg-[#0E131E] p-6 sm:p-7 shadow-2xl space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-rose-500/40 bg-rose-500/10 text-rose-400">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h3 className="font-['Orbitron'] text-base font-bold text-white">
+                  RÉINITIALISER L'E-SPORT
+                </h3>
+                <p className="font-['JetBrains_Mono'] text-xs text-rose-400 font-bold">
+                  Remise à zéro complète
+                </p>
+              </div>
+            </div>
+
+            <p className="font-['Chakra_Petch'] text-xs text-slate-300 leading-relaxed">
+              Voulez-vous supprimer tous les tournois, inscriptions, licences, matchs et scores ? Tout le module E-Sport sera réinitialisé à vide.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearAllModalOpen(false)}
+                className="rounded-xl px-4 py-2 font-['JetBrains_Mono'] text-xs text-slate-400 hover:text-white transition"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClearAllEsportData}
+                className="flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 px-5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] transition active:scale-95"
+              >
+                <Trash2 size={13} />
+                <span>Oui, tout réinitialiser</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL : MODIFIER LES INFORMATIONS DU JOUEUR / INSCRIPTION                 */}
+      {/* ========================================================================= */}
+      {editingRegistration && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fadeIn"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setEditingRegistration(null);
+          }}
+        >
+          <div className="relative w-full max-w-lg rounded-3xl border border-amber-500/40 bg-[#0E131E] p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-500/40 bg-amber-500/10 text-amber-400">
+                  <Edit3 size={22} />
+                </div>
+                <div>
+                  <h3 className="font-['Orbitron'] text-base sm:text-lg font-bold text-white">
+                    MODIFIER LE JOUEUR
+                  </h3>
+                  <p className="font-['JetBrains_Mono'] text-xs text-amber-300 font-bold">
+                    ID : {editingRegistration.id} • {editingRegistration.tournamentTitle}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingRegistration(null)}
+                className="rounded-xl p-2 text-slate-400 hover:text-white hover:bg-white/10 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditRegistration} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* GamerTag / Pseudo */}
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Pseudo / GamerTag *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editRegGamerTag}
+                    onChange={(e) => setEditRegGamerTag(e.target.value)}
+                    placeholder="Ex: NarutoUzumaki"
+                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 font-['Orbitron'] text-sm font-bold text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                  />
+                </div>
+
+                {/* Nom complet */}
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Nom complet officiel *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editRegFullName}
+                    onChange={(e) => setEditRegFullName(e.target.value)}
+                    placeholder="Ex: Jean-Luc Mbarga"
+                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 font-['Chakra_Petch'] text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Téléphone WhatsApp */}
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Numéro de Téléphone (WhatsApp) *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={editRegPhone}
+                    onChange={(e) => setEditRegPhone(e.target.value)}
+                    placeholder="Ex: +237 690 00 00 00"
+                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 font-['JetBrains_Mono'] text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                  />
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Adresse Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editRegEmail}
+                    onChange={(e) => setEditRegEmail(e.target.value)}
+                    placeholder="Ex: joueur@gmail.com"
+                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 font-['JetBrains_Mono'] text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Plateforme */}
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Plateforme de jeu
+                  </label>
+                  <select
+                    value={editRegPlatform}
+                    onChange={(e) => setEditRegPlatform(e.target.value)}
+                    className="w-full rounded-xl border border-white/15 bg-[#141824] px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs text-white focus:border-amber-400 focus:outline-none"
+                  >
+                    <option value="PlayStation 5">PlayStation 5</option>
+                    <option value="PlayStation 4">PlayStation 4</option>
+                    <option value="Xbox Series X/S">Xbox Series X/S</option>
+                    <option value="PC Gamer">PC Gamer</option>
+                    <option value="Nintendo Switch">Nintendo Switch</option>
+                    <option value="Mobile">Mobile (iOS / Android)</option>
+                  </select>
+                </div>
+
+                {/* Statut de l'inscription */}
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Statut de l'inscription
+                  </label>
+                  <select
+                    value={editRegStatus}
+                    onChange={(e) => setEditRegStatus(e.target.value as RegistrationStatus)}
+                    className="w-full rounded-xl border border-white/15 bg-[#141824] px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs text-white focus:border-amber-400 focus:outline-none font-bold"
+                  >
+                    <option value="en attente" className="text-amber-400">EN ATTENTE</option>
+                    <option value="validée" className="text-emerald-400">VALIDÉE (Émet/Active la Licence)</option>
+                    <option value="refusée" className="text-rose-400">REFUSÉE</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Jeu / Spécialité */}
+              <div>
+                <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                  Jeu de compétition / Spécialité
+                </label>
+                <input
+                  type="text"
+                  value={editRegGame}
+                  onChange={(e) => setEditRegGame(e.target.value)}
+                  placeholder="Ex: Naruto Shippuden Ultimate Ninja Storm 4"
+                  className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                />
+              </div>
+
+              {/* Photo URL / Avatar */}
+              <div>
+                <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                  URL de la photo ou avatar
+                </label>
+                <input
+                  type="url"
+                  value={editRegPhotoUrl}
+                  onChange={(e) => setEditRegPhotoUrl(e.target.value)}
+                  placeholder="https://images.unsplash.com/..."
+                  className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2 font-['JetBrains_Mono'] text-xs text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3.5 text-xs font-['JetBrains_Mono'] text-amber-300">
+                <span className="font-bold">Synchronisation automatique :</span> La modification du joueur met à jour instantanément sa licence officielle avec QR code, son profil dans le palmarès et ses matchs dans l'arbre.
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setEditingRegistration(null)}
+                  className="rounded-xl px-4 py-2 font-['JetBrains_Mono'] text-xs text-slate-400 hover:text-white transition"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 px-6 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.4)] transition active:scale-95"
+                >
+                  <Check size={14} />
+                  <span>Enregistrer les modifications</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL : MODIFIER UNE LICENCE NUMÉRIQUE                                    */}
+      {/* ========================================================================= */}
+      {editingLicense && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fadeIn"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setEditingLicense(null);
+          }}
+        >
+          <div className="relative w-full max-w-lg rounded-3xl border border-emerald-500/40 bg-[#0E131E] p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-400">
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <h3 className="font-['Orbitron'] text-base sm:text-lg font-bold text-white">
+                    MODIFIER LA LICENCE NUMÉRIQUE
+                  </h3>
+                  <p className="font-['JetBrains_Mono'] text-xs text-emerald-400 font-bold">
+                    {editingLicense.id}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingLicense(null)}
+                className="rounded-xl p-2 text-slate-400 hover:text-white hover:bg-white/10 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditLicense} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    GamerTag / Pseudo *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editLicGamerTag}
+                    onChange={(e) => setEditLicGamerTag(e.target.value)}
+                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 font-['Orbitron'] text-sm font-bold text-white focus:border-emerald-400 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Nom complet officiel *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editLicFullName}
+                    onChange={(e) => setEditLicFullName(e.target.value)}
+                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 font-['Chakra_Petch'] text-sm text-white focus:border-emerald-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Rang officiel
+                  </label>
+                  <select
+                    value={editLicRankLevel}
+                    onChange={(e) => setEditLicRankLevel(e.target.value as LicenseRankLevel)}
+                    className="w-full rounded-xl border border-white/15 bg-[#141824] px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs text-white focus:border-emerald-400 focus:outline-none"
+                  >
+                    <option value="Rookie">Rookie</option>
+                    <option value="Challenger">Challenger</option>
+                    <option value="Pro">Pro</option>
+                    <option value="Élite">Élite</option>
+                    <option value="Master">Master</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Statut de la licence
+                  </label>
+                  <select
+                    value={editLicStatus}
+                    onChange={(e) => setEditLicStatus(e.target.value as LicenseStatus)}
+                    className="w-full rounded-xl border border-white/15 bg-[#141824] px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs text-white focus:border-emerald-400 focus:outline-none font-bold"
+                  >
+                    <option value="Active" className="text-emerald-400">ACTIVE</option>
+                    <option value="Suspendue" className="text-amber-400">SUSPENDUE</option>
+                    <option value="Expirée" className="text-rose-400">EXPIRÉE</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Date d'expiration
+                  </label>
+                  <input
+                    type="text"
+                    value={editLicExpiresAt}
+                    onChange={(e) => setEditLicExpiresAt(e.target.value)}
+                    placeholder="Ex: 20 octobre 2027"
+                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2 font-['JetBrains_Mono'] text-xs text-white focus:border-emerald-400 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                    Points de classement
+                  </label>
+                  <input
+                    type="number"
+                    value={editLicPoints}
+                    onChange={(e) => setEditLicPoints(Number(e.target.value) || 0)}
+                    className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2 font-['JetBrains_Mono'] text-xs text-white focus:border-emerald-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold mb-1">
+                  Jeux / Spécialités (séparés par des virgules)
+                </label>
+                <input
+                  type="text"
+                  value={editLicSpecialties}
+                  onChange={(e) => setEditLicSpecialties(e.target.value)}
+                  placeholder="Ex: Naruto Storm 4, FC 25, Tekken 8"
+                  className="w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2 font-['JetBrains_Mono'] text-xs text-white focus:border-emerald-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setEditingLicense(null)}
+                  className="rounded-xl px-4 py-2 font-['JetBrains_Mono'] text-xs text-slate-400 hover:text-white transition"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-6 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_15px_rgba(16,185,129,0.4)] transition active:scale-95"
+                >
+                  <Check size={14} />
+                  <span>Enregistrer la licence</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
