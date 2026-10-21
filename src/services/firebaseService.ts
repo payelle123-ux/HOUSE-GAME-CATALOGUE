@@ -60,8 +60,14 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errMsg = error instanceof Error ? error.message : String(error);
+  const isQuota =
+    errMsg.includes("Quota limit exceeded") ||
+    errMsg.includes("Quota exceeded") ||
+    errMsg.includes("quota metric");
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMsg,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -77,6 +83,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
+
+  if (isQuota) {
+    console.warn("Firestore Quota Limit notice (resilient mode active):", JSON.stringify(errInfo));
+    return;
+  }
+
   console.error("Firestore Error: ", JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
@@ -533,7 +545,7 @@ export function subscribeToHomeContent(
       onUpdate({ ...INITIAL_HOME_CONTENT, ...data, bannerImage: banner });
     },
     (err) => {
-      console.error("Firestore home content error:", err);
+      onUpdate(INITIAL_HOME_CONTENT);
       handleFirestoreError(err, OperationType.GET, `${HOME_COLL}/${HOME_DOC_ID}`);
       if (onError) onError(err);
     }
@@ -591,7 +603,7 @@ export function subscribeToActivities(
       }
     },
     (err) => {
-      console.error("Firestore activities subscription error:", err);
+      onUpdate(INITIAL_ACTIVITIES);
       handleFirestoreError(err, OperationType.GET, `${HOME_COLL}/${ACTIVITIES_DOC_ID}`);
       if (onError) onError(err);
     }
@@ -639,7 +651,7 @@ export function subscribeToActivitiesBanner(
       }
     },
     (err) => {
-      console.error("Firestore activities banner subscription error:", err);
+      onUpdate(DEFAULT_ACTIVITIES_BANNER);
       handleFirestoreError(err, OperationType.GET, `${HOME_COLL}/${ACTIVITIES_BANNER_DOC_ID}`);
       if (onError) onError(err);
     }

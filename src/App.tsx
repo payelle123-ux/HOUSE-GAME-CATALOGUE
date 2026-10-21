@@ -1296,6 +1296,8 @@ export default function App() {
               tournaments={tournaments}
               shopInfo={shopInfo}
               isAdmin={isAdmin}
+              onUnlockAdmin={() => setIsAdmin(true)}
+              onLogoutAdmin={() => setIsAdmin(false)}
               registrations={esportRegistrations}
               onUpdateRegistrations={(regs) => {
                 setEsportRegistrations(regs);

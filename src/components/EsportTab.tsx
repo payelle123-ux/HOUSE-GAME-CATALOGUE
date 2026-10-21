@@ -56,6 +56,10 @@ import {
   RefreshCw,
   Volume2,
   VolumeX,
+  KeyRound,
+  Eye,
+  EyeOff,
+  ShieldAlert,
 } from "lucide-react";
 import { EsportDigitalLicenseCard } from "./EsportDigitalLicenseCard";
 import { EsportBracketViewer } from "./EsportBracketViewer";
@@ -116,6 +120,8 @@ interface EsportTabProps {
   onDeleteTournament: (tournament: Tournament) => void;
   registrations?: EsportRegistration[];
   onUpdateRegistrations?: (regs: EsportRegistration[]) => void;
+  onUnlockAdmin?: () => void;
+  onLogoutAdmin?: () => void;
 }
 
 type EsportSubView = "tournaments" | "licenses" | "brackets" | "rankings" | "player-space" | "admin-dash";
@@ -133,9 +139,20 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   onDeleteTournament,
   registrations: propRegistrations,
   onUpdateRegistrations,
+  onUnlockAdmin,
+  onLogoutAdmin,
 }) => {
   // Navigation inside Esport Tab
   const [subView, setSubView] = useState<EsportSubView>("tournaments");
+
+  // Admin Security Access Gate
+  const [isEsportAdminUnlocked, setIsEsportAdminUnlocked] = useState(false);
+  const hasAdminAccess = isAdmin || isEsportAdminUnlocked;
+
+  // Admin PIN Gate Form State
+  const [adminPinInput, setAdminPinInput] = useState("");
+  const [adminPinError, setAdminPinError] = useState<string | null>(null);
+  const [showPinPassword, setShowPinPassword] = useState(false);
 
   // Local state for esports module
   const [tournamentsList, setTournamentsList] = useState<Tournament[]>(() => {
@@ -817,41 +834,25 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   // Admin Validate Registration (Emits License Automatically)
   const handleValidateRegistration = (reg: EsportRegistration) => {
     sfx.playClick();
-    let validatedReg: EsportRegistration | null = null;
-    const updatedRegs = registrations.map((r) => {
-      if (r.id === reg.id) {
-        const v: EsportRegistration = {
-          ...r,
-          status: "validée" as RegistrationStatus,
-          paymentConfirmed: true,
-          validatedAt: Date.now(),
-        };
-        validatedReg = v;
-        return v;
-      }
-      return r;
-    });
 
-    if (validatedReg) {
-      saveRegistrationCloud(validatedReg);
-      broadcastEsportEvent("update-registration", validatedReg);
-    }
-
-    // Check if player already has an existing license
+    // 1. Resolve or create official license first
     let existingLic = licenses.find(
-      (l) => l.playerId === reg.playerId || l.gamerTag.toLowerCase() === reg.gamerTag.toLowerCase()
+      (l) =>
+        (reg.licenseId && l.id === reg.licenseId) ||
+        (l.playerId && reg.playerId && l.playerId.trim() === reg.playerId.trim()) ||
+        (l.gamerTag && reg.gamerTag && l.gamerTag.trim().toLowerCase() === reg.gamerTag.trim().toLowerCase())
     );
 
     if (!existingLic) {
-      const newLicenseId = generateLicenseNumber();
+      const newLicenseId = reg.licenseId || generateLicenseNumber();
       const issuedStr = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
       const expiresStr = new Date(Date.now() + 86400000 * 365).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
 
       const newLic: EsportLicense = {
         id: newLicenseId,
-        playerId: reg.playerId,
-        gamerTag: reg.gamerTag,
-        fullName: reg.fullName,
+        playerId: reg.playerId || `HGP-${Math.floor(1000 + Math.random() * 9000)}`,
+        gamerTag: reg.gamerTag || "Joueur",
+        fullName: reg.fullName || reg.gamerTag || "Compétiteur Officiel",
         phoneMasked: maskPhoneNumber(reg.phone),
         photoUrl: reg.photoUrl,
         qrCodeData: `https://house-game-sarl.vercel.app/?tab=esport&license=${newLicenseId}`,
@@ -859,7 +860,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
         expiresAt: expiresStr,
         status: "Active",
         rankLevel: "Challenger",
-        gameSpecialties: [reg.game],
+        gameSpecialties: [reg.game || "Tournoi E-Sport HG"],
         totalPoints: 100,
       };
 
@@ -883,10 +884,32 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       }
     }
 
+    // 2. Update registration with status validée AND the exact licenseId
+    let validatedReg: EsportRegistration | null = null;
+    const updatedRegs = registrations.map((r) => {
+      if (r.id === reg.id) {
+        const v: EsportRegistration = {
+          ...r,
+          status: "validée" as RegistrationStatus,
+          paymentConfirmed: true,
+          licenseId: existingLic?.id || r.licenseId,
+          validatedAt: Date.now(),
+        };
+        validatedReg = v;
+        return v;
+      }
+      return r;
+    });
+
     setRegistrations(updatedRegs);
     saveEsportRegistrations(updatedRegs);
     onUpdateRegistrations?.(updatedRegs);
     broadcastEsportEvent("update-registrations", updatedRegs);
+
+    if (validatedReg) {
+      saveRegistrationCloud(validatedReg);
+      broadcastEsportEvent("update-registration", validatedReg);
+    }
 
     // Recalculate accurate validated count for this tournament
     const nextValidatedCount = updatedRegs.filter(
@@ -1572,6 +1595,32 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     }
   };
 
+  // Verify Admin PIN Code
+  const handleVerifyAdminPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const expected = (shopInfo.adminPin || "4826").trim();
+    if (adminPinInput.trim() === expected) {
+      sfx.playSuccess();
+      setIsEsportAdminUnlocked(true);
+      onUnlockAdmin?.();
+      setAdminPinError(null);
+      setAdminPinInput("");
+      showToast("Accès administrateur déverrouillé avec succès !");
+    } else {
+      sfx.playError();
+      setAdminPinError("Code administrateur incorrect. Veuillez saisir le code PIN du site.");
+    }
+  };
+
+  // Lock Admin Access
+  const handleLockAdmin = () => {
+    sfx.playClick();
+    setIsEsportAdminUnlocked(false);
+    onLogoutAdmin?.();
+    setSubView("tournaments");
+    showToast("Espace administrateur verrouillé.");
+  };
+
   const selectedBracketTournament =
     tournamentsList.find((t) => t.id === selectedBracketTournamentId) || tournamentsList[0];
 
@@ -1767,7 +1816,12 @@ export const EsportTab: React.FC<EsportTabProps> = ({
           { id: "brackets", label: "Tableaux & Scores Live", icon: Swords, count: matches.length },
           { id: "rankings", label: "Classement & Palmarès", icon: Award, count: players.length },
           { id: "player-space", label: "Espace Joueur", icon: User },
-          { id: "admin-dash", label: "Gestion E-Sport (Admin)", icon: Lock, count: registrations.filter((r) => r.status === "en attente").length },
+          {
+            id: "admin-dash",
+            label: hasAdminAccess ? "Gestion E-Sport (Admin)" : "Gestion E-Sport (Verrouillé)",
+            icon: hasAdminAccess ? ShieldCheck : Lock,
+            count: registrations.filter((r) => r.status === "en attente").length,
+          },
         ].map((item) => {
           const Icon = item.icon;
           const isActive = subView === item.id;
@@ -1781,10 +1835,12 @@ export const EsportTab: React.FC<EsportTabProps> = ({
               className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 font-['JetBrains_Mono'] text-xs font-bold transition active:scale-95 ${
                 isActive
                   ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]"
+                  : item.id === "admin-dash" && !hasAdminAccess
+                  ? "bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/30"
                   : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white border border-white/5"
               }`}
             >
-              <Icon size={15} className={isActive ? "text-white" : "text-emerald-400"} />
+              <Icon size={15} className={isActive ? "text-white" : item.id === "admin-dash" && !hasAdminAccess ? "text-amber-400" : "text-emerald-400"} />
               <span>{item.label}</span>
               {typeof item.count === "number" && item.count > 0 && (
                 <span
@@ -2683,57 +2739,153 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       {/* VUE 6 : ESPACE GESTION E-SPORT (ADMIN & STAFF)                             */}
       {/* ========================================================================= */}
       {subView === "admin-dash" && (
-        <section className="space-y-8 animate-fadeIn">
-          {/* Admin Header & CSV Export */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6 rounded-3xl border border-emerald-500/30 bg-[#0E1522] shadow-xl">
-            <div>
-              <div className="inline-flex items-center gap-2 text-xs font-['JetBrains_Mono'] font-bold text-emerald-400">
-                <ShieldCheck size={16} />
-                <span>ESPACE PRO • TABLEAU DE BORD ORGANISATION ESPORT</span>
+        !hasAdminAccess ? (
+          <section className="space-y-6 animate-fadeIn py-6">
+            <div className="mx-auto max-w-md rounded-3xl border border-amber-500/40 bg-gradient-to-b from-[#121724] to-[#0A0D15] p-6 sm:p-8 shadow-[0_0_50px_rgba(245,158,11,0.15)] space-y-6">
+              <div className="text-center space-y-3">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-500/40 bg-amber-500/10 text-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.25)]">
+                  <Lock size={32} />
+                </div>
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-[11px] font-['JetBrains_Mono'] font-bold text-amber-300">
+                  <ShieldAlert size={14} />
+                  <span>ESPACE ADMINISTRATEUR RESTREINT</span>
+                </div>
+                <h3 className="font-['Orbitron'] text-xl font-bold text-white tracking-wide">
+                  AUTHENTIFICATION REQUISE
+                </h3>
+                <p className="font-['Chakra_Petch'] text-xs text-slate-300 leading-relaxed">
+                  L'accès à la gestion des inscriptions, licences House Game ID et arbres de tournois est strictement protégé. Veuillez saisir le <strong>code administrateur du site</strong> pour continuer.
+                </p>
               </div>
-              <h2 className="font-['Orbitron'] text-xl sm:text-2xl font-bold text-white mt-1">
-                GESTION COMPLÈTE DU MODULE HOUSE GAME ESPORT
-              </h2>
-              <p className="font-['Chakra_Petch'] text-xs text-slate-300">
-                Validez les inscriptions, gérez les licences certifiées, organisez les matchs et exportez vos données.
-              </p>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={onOpenAddTournament}
-                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-md transition"
-              >
-                <Plus size={13} />
-                <span>Nouveau Tournoi</span>
-              </button>
-              <button
-                onClick={() => exportToCsv(registrations, "inscriptions-house-game-esport")}
-                disabled={registrations.length === 0}
-                className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-emerald-300 transition disabled:opacity-40"
-              >
-                <Download size={13} />
-                <span>Export Inscriptions (CSV)</span>
-              </button>
-              <button
-                onClick={() => exportToCsv(licenses, "licences-house-game-esport")}
-                disabled={licenses.length === 0}
-                className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-white transition disabled:opacity-40"
-              >
-                <Download size={13} />
-                <span>Export Licences (CSV)</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleRequestClearAllEsportData}
-                title="Supprimer tous les tournois et données esport pour repartir de zéro"
-                className="flex items-center gap-1.5 rounded-xl border border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-rose-300 transition"
-              >
-                <Trash2 size={13} />
-                <span>Vider tout l'E-Sport</span>
-              </button>
+              <form onSubmit={handleVerifyAdminPin} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-['JetBrains_Mono'] text-slate-300 font-bold">
+                    Code secret administrateur (PIN)
+                  </label>
+                  <div className="relative">
+                    <KeyRound size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type={showPinPassword ? "text" : "password"}
+                      autoFocus
+                      required
+                      value={adminPinInput}
+                      onChange={(e) => {
+                        setAdminPinInput(e.target.value);
+                        if (adminPinError) setAdminPinError(null);
+                      }}
+                      placeholder="Entrez le code admin..."
+                      className="w-full rounded-xl border border-white/20 bg-black/40 pl-10 pr-11 py-3 font-['Orbitron'] text-sm tracking-widest text-white placeholder-slate-500 focus:border-amber-400 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPinPassword(!showPinPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition p-1"
+                      title={showPinPassword ? "Masquer le code" : "Afficher le code"}
+                    >
+                      {showPinPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {adminPinError && (
+                  <div className="rounded-xl border border-rose-500/40 bg-rose-500/15 p-3 text-xs font-['JetBrains_Mono'] text-rose-300 flex items-center gap-2">
+                    <AlertTriangle size={15} className="shrink-0" />
+                    <span>{adminPinError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-2">
+                  <button
+                    type="submit"
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 hover:opacity-95 py-3 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_20px_rgba(245,158,11,0.3)] transition active:scale-95"
+                  >
+                    <KeyRound size={14} />
+                    <span>DÉVERROUILLER L'ESPACE ADMIN</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubView("tournaments");
+                      setAdminPinInput("");
+                      setAdminPinError(null);
+                    }}
+                    className="w-full rounded-xl py-2 font-['JetBrains_Mono'] text-xs text-slate-400 hover:text-white transition text-center"
+                  >
+                    Annuler / Retour aux tournois
+                  </button>
+                </div>
+              </form>
             </div>
-          </div>
+          </section>
+        ) : (
+          <section className="space-y-8 animate-fadeIn">
+            {/* Admin Header & Session Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6 rounded-3xl border border-emerald-500/30 bg-[#0E1522] shadow-xl">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <div className="inline-flex items-center gap-2 text-xs font-['JetBrains_Mono'] font-bold text-emerald-400">
+                    <ShieldCheck size={16} />
+                    <span>ESPACE PRO • TABLEAU DE BORD ORGANISATION ESPORT</span>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-['JetBrains_Mono'] font-bold text-emerald-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>DÉVERROUILLÉ</span>
+                  </span>
+                </div>
+                <h2 className="font-['Orbitron'] text-xl sm:text-2xl font-bold text-white mt-1">
+                  GESTION COMPLÈTE DU MODULE HOUSE GAME ESPORT
+                </h2>
+                <p className="font-['Chakra_Petch'] text-xs text-slate-300">
+                  Validez les inscriptions, gérez les licences certifiées, organisez les matchs et exportez vos données.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={onOpenAddTournament}
+                  className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-md transition"
+                >
+                  <Plus size={13} />
+                  <span>Nouveau Tournoi</span>
+                </button>
+                <button
+                  onClick={() => exportToCsv(registrations, "inscriptions-house-game-esport")}
+                  disabled={registrations.length === 0}
+                  className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-emerald-300 transition disabled:opacity-40"
+                >
+                  <Download size={13} />
+                  <span>Export Inscriptions (CSV)</span>
+                </button>
+                <button
+                  onClick={() => exportToCsv(licenses, "licences-house-game-esport")}
+                  disabled={licenses.length === 0}
+                  className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-white transition disabled:opacity-40"
+                >
+                  <Download size={13} />
+                  <span>Export Licences (CSV)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRequestClearAllEsportData}
+                  title="Supprimer tous les tournois et données esport pour repartir de zéro"
+                  className="flex items-center gap-1.5 rounded-xl border border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-rose-300 transition"
+                >
+                  <Trash2 size={13} />
+                  <span>Vider tout l'E-Sport</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLockAdmin}
+                  title="Verrouiller à nouveau l'espace administrateur"
+                  className="flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-3.5 py-2 font-['JetBrains_Mono'] text-xs font-bold text-amber-300 transition active:scale-95"
+                >
+                  <Lock size={13} />
+                  <span>Verrouiller</span>
+                </button>
+              </div>
+            </div>
 
           {/* Suivi en direct du remplissage des places par tournoi */}
           {tournamentsList.length > 0 && (
@@ -2989,32 +3141,34 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                     {registrations
                       .filter((r) => adminRegFilter === "all" || r.status === adminRegFilter)
                       .map((r) => {
-                        const matchingLic = licenses.find(
-                          (l) =>
-                            (r.licenseId && l.id === r.licenseId) ||
-                            l.playerId === r.playerId ||
-                            l.gamerTag.trim().toLowerCase() === r.gamerTag.trim().toLowerCase()
-                        );
+                        const matchingLic = licenses.find((l) => {
+                          if (r.licenseId && l.id === r.licenseId) return true;
+                          if (l.playerId && r.playerId && l.playerId.trim() === r.playerId.trim()) return true;
+                          if (l.gamerTag && r.gamerTag && l.gamerTag.trim().toLowerCase() === r.gamerTag.trim().toLowerCase()) return true;
+                          return false;
+                        });
+                        const cleanPhone = (r.phone || "").replace(/[^0-9]/g, "");
                         return (
                         <tr key={r.id} className="hover:bg-white/[0.02] transition">
                           <td className="py-3 px-3 font-bold text-slate-400">{r.id}</td>
                           <td className="py-3 px-3">
-                            <strong className="text-white block font-['Orbitron']">{r.gamerTag}</strong>
-                            <span className="text-[10px] text-slate-400">{r.fullName}</span>
+                            <strong className="text-white block font-['Orbitron']">{r.gamerTag || "Joueur"}</strong>
+                            <span className="text-[10px] text-slate-400">{r.fullName || "—"}</span>
                           </td>
-                          <td className="py-3 px-3 text-slate-300 max-w-xs truncate">{r.tournamentTitle}</td>
+                          <td className="py-3 px-3 text-slate-300 max-w-xs truncate">{r.tournamentTitle || "Tournoi"}</td>
                           <td className="py-3 px-3">
                             <div className="flex items-center gap-2">
-                              <span className="text-slate-300">{r.phone}</span>
-                              <a
-                                href={`https://api.whatsapp.com/send?phone=${r.phone.replace(/[^0-9]/g, "")}&text=${encodeURIComponent(
-                                  `Bonjour ${r.gamerTag}, c'est la direction HOUSE GAME ESPORT concernant votre inscription au tournoi ${r.tournamentTitle}.`
-                                )}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="rounded-lg bg-[#25D366]/20 border border-[#25D366]/40 hover:bg-[#25D366]/30 p-1.5 text-[#25D366] transition active:scale-95"
-                                title="Contacter le joueur sur WhatsApp"
-                              >
+                              <span className="text-slate-300">{r.phone || "Non renseigné"}</span>
+                              {cleanPhone && (
+                                <a
+                                  href={`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(
+                                    `Bonjour ${r.gamerTag || "joueur"}, c'est la direction HOUSE GAME ESPORT concernant votre inscription au tournoi ${r.tournamentTitle || ""}.`
+                                  )}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-lg bg-[#25D366]/20 border border-[#25D366]/40 hover:bg-[#25D366]/30 p-1.5 text-[#25D366] transition active:scale-95"
+                                  title="Contacter le joueur sur WhatsApp"
+                                >
                                 <Phone size={12} />
                               </a>
                             </div>
@@ -3203,6 +3357,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
             )}
           </div>
         </section>
+        )
       )}
 
       {/* ========================================================================= */}

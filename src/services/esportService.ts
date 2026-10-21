@@ -527,8 +527,9 @@ export function generateLicenseNumber(): string {
 /**
  * Masks a phone number for public display (prevents privacy leakage)
  */
-export function maskPhoneNumber(phone: string): string {
-  const cleaned = phone.trim();
+export function maskPhoneNumber(phone?: string | null): string {
+  if (!phone) return "*** ***";
+  const cleaned = String(phone).trim();
   if (cleaned.length < 8) return "*** ***";
   const start = cleaned.slice(0, 7);
   const end = cleaned.slice(-2);
