@@ -16,7 +16,14 @@ import {
   deleteDoc,
   onSnapshot,
   getDocs,
+  query,
+  limit,
 } from "firebase/firestore";
+import {
+  firestoreCache,
+  DEFAULT_TTLS,
+  SingletonSubscription,
+} from "./firestoreCache";
 
 // Storage Keys
 const TOURNAMENTS_KEY = "hg_esport_tournaments_v3";
@@ -323,185 +330,301 @@ export function broadcastEsportEvent(type: string, payload: unknown): void {
 
 // ==================== FIRESTORE SYNC & SUBSCRIPTIONS ====================
 
+// Singleton multiplexer for registrations: ensures App.tsx and EsportTab.tsx share ONE onSnapshot listener
+const registrationsMultiplexer = new SingletonSubscription<EsportRegistration[]>("registrations");
+const licensesSubscribers = new Set<(lics: EsportLicense[]) => void>();
+const matchesSubscribers = new Set<(matches: EsportMatch[]) => void>();
+
 export function subscribeToEsportRegistrations(
   onUpdate: (regs: EsportRegistration[]) => void,
   onError?: (err: unknown) => void
-) {
-  const colRef = collection(db, COLL_REGISTRATIONS);
-  return onSnapshot(
-    colRef,
-    (snapshot) => {
-      try {
-        const cloudItems: EsportRegistration[] = [];
-        snapshot.forEach((d) => {
-          const data = d.data() as EsportRegistration;
-          cloudItems.push({ ...data, id: d.id });
-        });
+): () => void {
+  return registrationsMultiplexer.subscribe(
+    onUpdate,
+    (emit) => {
+      const colRef = collection(db, COLL_REGISTRATIONS);
+      const q = query(colRef, limit(200));
 
-        // Smart merge with local storage: local validated status is preserved if newer
-        const localItems = loadEsportRegistrations();
-        const map = new Map<string, EsportRegistration>();
-        localItems.forEach((r) => map.set(r.id, r));
-        cloudItems.forEach((r) => {
-          const existing = map.get(r.id);
-          // If locally already validated and cloud still has pending, preserve validation
-          if (existing && existing.status === "validée" && r.status === "en attente") {
-            map.set(r.id, { ...r, ...existing });
-          } else {
-            map.set(r.id, { ...(existing || {}), ...r });
+      return onSnapshot(
+        q,
+        (snapshot) => {
+          try {
+            const cloudItems: EsportRegistration[] = [];
+            snapshot.forEach((d) => {
+              const data = d.data() as EsportRegistration;
+              cloudItems.push({ ...data, id: d.id });
+            });
+
+            // Smart merge with local storage: local validated status is preserved if newer
+            const localItems = loadEsportRegistrations();
+            const map = new Map<string, EsportRegistration>();
+            localItems.forEach((r) => map.set(r.id, r));
+            cloudItems.forEach((r) => {
+              const existing = map.get(r.id);
+              if (existing && existing.status === "validée" && r.status === "en attente") {
+                map.set(r.id, { ...r, ...existing });
+              } else {
+                map.set(r.id, { ...(existing || {}), ...r });
+              }
+            });
+
+            const merged = Array.from(map.values());
+            merged.sort((a, b) => (b.registeredAt || 0) - (a.registeredAt || 0));
+
+            saveEsportRegistrations(merged);
+            firestoreCache.set("registrations", merged, DEFAULT_TTLS.REGISTRATIONS, REGISTRATIONS_KEY);
+            emit(merged);
+          } catch (err) {
+            console.warn("Error processing registrations snapshot:", err);
+            const cached = loadEsportRegistrations();
+            emit(cached);
+            if (onError) onError(err);
           }
-        });
-
-        const merged = Array.from(map.values());
-        merged.sort((a, b) => (b.registeredAt || 0) - (a.registeredAt || 0));
-
-        saveEsportRegistrations(merged);
-        onUpdate(merged);
-      } catch (err) {
-        console.error("Error processing registrations snapshot:", err);
-        const cached = loadEsportRegistrations();
-        onUpdate(cached);
-        if (onError) onError(err);
-      }
+        },
+        (err) => {
+          firestoreCache.isQuotaError(err);
+          console.warn("Firestore registrations notice (using local cache):", err);
+          const cached = loadEsportRegistrations();
+          emit(cached);
+          if (onError) onError(err);
+        }
+      );
     },
-    (err) => {
-      console.warn("Firestore registrations notice (using local cache):", err);
-      const cached = loadEsportRegistrations();
-      onUpdate(cached);
-      if (onError) onError(err);
-    }
+    loadEsportRegistrations()
   );
 }
 
 export async function saveRegistrationCloud(reg: EsportRegistration): Promise<void> {
+  const current = loadEsportRegistrations();
+  const updated = current.some((r) => r.id === reg.id)
+    ? current.map((r) => (r.id === reg.id ? reg : r))
+    : [reg, ...current];
+
+  saveEsportRegistrations(updated);
+  firestoreCache.set("registrations", updated, DEFAULT_TTLS.REGISTRATIONS, REGISTRATIONS_KEY);
+  registrationsMultiplexer.updateLocally(updated);
+
   try {
     const docRef = doc(db, COLL_REGISTRATIONS, reg.id);
     const sanitized = JSON.parse(JSON.stringify(reg));
     await setDoc(docRef, sanitized, { merge: true });
   } catch (err) {
-    console.warn("Firestore saveRegistrationCloud fallback to local:", err);
+    firestoreCache.isQuotaError(err);
+    console.warn("Firestore saveRegistrationCloud notice (persisted locally):", err);
   }
 }
 
 export async function deleteRegistrationCloud(id: string): Promise<void> {
+  const current = loadEsportRegistrations();
+  const updated = current.filter((r) => r.id !== id);
+
+  saveEsportRegistrations(updated);
+  firestoreCache.set("registrations", updated, DEFAULT_TTLS.REGISTRATIONS, REGISTRATIONS_KEY);
+  registrationsMultiplexer.updateLocally(updated);
+
   try {
     const docRef = doc(db, COLL_REGISTRATIONS, id);
     await deleteDoc(docRef);
   } catch (err) {
-    console.warn("Firestore deleteRegistrationCloud fallback:", err);
+    firestoreCache.isQuotaError(err);
+    console.warn("Firestore deleteRegistrationCloud notice:", err);
   }
 }
+
+// ==================== LICENSES (CACHE-FIRST WITH TTL) ====================
 
 export function subscribeToEsportLicenses(
   onUpdate: (lics: EsportLicense[]) => void,
   onError?: (err: unknown) => void
-) {
-  const colRef = collection(db, COLL_LICENSES);
-  return onSnapshot(
-    colRef,
-    (snapshot) => {
-      try {
-        const cloudItems: EsportLicense[] = [];
-        snapshot.forEach((d) => {
-          const data = d.data() as EsportLicense;
-          cloudItems.push({ ...data, id: d.id });
-        });
+): () => void {
+  licensesSubscribers.add(onUpdate);
 
-        // Smart merge with local licenses: NEVER discard locally issued licenses!
-        const localItems = loadEsportLicenses();
-        const map = new Map<string, EsportLicense>();
-        localItems.forEach((l) => map.set(l.id, l));
-        cloudItems.forEach((l) => {
-          const existing = map.get(l.id);
-          map.set(l.id, { ...(existing || {}), ...l });
-        });
+  const cached = firestoreCache.get<EsportLicense[]>("licenses", LICENSES_KEY);
+  const initial = cached?.data || loadEsportLicenses();
+  onUpdate(initial);
 
-        const merged = Array.from(map.values());
-        saveEsportLicenses(merged);
-        onUpdate(merged);
-      } catch (err) {
-        console.error("Licenses snapshot error:", err);
-        const cached = loadEsportLicenses();
-        onUpdate(cached);
-        if (onError) onError(err);
-      }
-    },
-    (err) => {
-      console.warn("Firestore licenses notice (using local cache):", err);
-      const cached = loadEsportLicenses();
-      onUpdate(cached);
+  if (cached?.isFresh || firestoreCache.isQuotaCoolingDown()) {
+    return () => {
+      licensesSubscribers.delete(onUpdate);
+    };
+  }
+
+  let isCancelled = false;
+  firestoreCache
+    .dedupe("fetch_licenses", async () => {
+      const colRef = collection(db, COLL_LICENSES);
+      const q = query(colRef, limit(200));
+      const snapshot = await getDocs(q);
+
+      const cloudItems: EsportLicense[] = [];
+      snapshot.forEach((d) => {
+        cloudItems.push({ ...(d.data() as EsportLicense), id: d.id });
+      });
+
+      // Smart merge: never discard locally issued licenses
+      const localItems = loadEsportLicenses();
+      const map = new Map<string, EsportLicense>();
+      localItems.forEach((l) => map.set(l.id, l));
+      cloudItems.forEach((l) => {
+        const existing = map.get(l.id);
+        map.set(l.id, { ...(existing || {}), ...l });
+      });
+
+      return Array.from(map.values());
+    })
+    .then((fresh) => {
+      if (isCancelled) return;
+      saveEsportLicenses(fresh);
+      firestoreCache.set("licenses", fresh, DEFAULT_TTLS.LICENSES, LICENSES_KEY);
+      licensesSubscribers.forEach((cb) => {
+        try { cb(fresh); } catch { /* ignore */ }
+      });
+    })
+    .catch((err) => {
+      firestoreCache.isQuotaError(err);
+      console.warn("Licenses fetch notice (using cache):", err);
       if (onError) onError(err);
-    }
-  );
+    });
+
+  return () => {
+    isCancelled = true;
+    licensesSubscribers.delete(onUpdate);
+  };
 }
 
 export async function saveLicenseCloud(lic: EsportLicense): Promise<void> {
+  const current = loadEsportLicenses();
+  const updated = current.some((l) => l.id === lic.id)
+    ? current.map((l) => (l.id === lic.id ? lic : l))
+    : [lic, ...current];
+
+  saveEsportLicenses(updated);
+  firestoreCache.set("licenses", updated, DEFAULT_TTLS.LICENSES, LICENSES_KEY);
+  licensesSubscribers.forEach((cb) => {
+    try { cb(updated); } catch { /* ignore */ }
+  });
+
   try {
     const docRef = doc(db, COLL_LICENSES, lic.id);
     const sanitized = JSON.parse(JSON.stringify(lic));
     await setDoc(docRef, sanitized, { merge: true });
   } catch (err) {
-    console.warn("Firestore saveLicenseCloud fallback:", err);
+    firestoreCache.isQuotaError(err);
+    console.warn("Firestore saveLicenseCloud notice (persisted locally):", err);
   }
 }
 
 export async function deleteLicenseCloud(id: string): Promise<void> {
+  const current = loadEsportLicenses();
+  const updated = current.filter((l) => l.id !== id);
+
+  saveEsportLicenses(updated);
+  firestoreCache.set("licenses", updated, DEFAULT_TTLS.LICENSES, LICENSES_KEY);
+  licensesSubscribers.forEach((cb) => {
+    try { cb(updated); } catch { /* ignore */ }
+  });
+
   try {
     const docRef = doc(db, COLL_LICENSES, id);
     await deleteDoc(docRef);
   } catch (err) {
-    console.warn("Firestore deleteLicenseCloud fallback:", err);
+    firestoreCache.isQuotaError(err);
+    console.warn("Firestore deleteLicenseCloud notice:", err);
   }
 }
+
+// ==================== MATCHES (CACHE-FIRST WITH TTL) ====================
 
 export function subscribeToEsportMatches(
   onUpdate: (matches: EsportMatch[]) => void,
   onError?: (err: unknown) => void
-) {
-  const colRef = collection(db, COLL_MATCHES);
-  return onSnapshot(
-    colRef,
-    (snapshot) => {
-      try {
-        if (!snapshot.empty) {
-          const items: EsportMatch[] = [];
-          snapshot.forEach((d) => items.push({ ...(d.data() as EsportMatch), id: d.id }));
-          items.sort((a, b) => (a.round || 1) - (b.round || 1) || (a.matchNumber || 0) - (b.matchNumber || 0));
-          saveEsportMatches(items);
-          onUpdate(items);
-        } else {
-          const cached = loadEsportMatches();
-          onUpdate(cached);
-        }
-      } catch (err) {
-        if (onError) onError(err);
+): () => void {
+  matchesSubscribers.add(onUpdate);
+
+  const cached = firestoreCache.get<EsportMatch[]>("matches", MATCHES_KEY);
+  const initial = cached?.data || loadEsportMatches();
+  onUpdate(initial);
+
+  if (cached?.isFresh || firestoreCache.isQuotaCoolingDown()) {
+    return () => {
+      matchesSubscribers.delete(onUpdate);
+    };
+  }
+
+  let isCancelled = false;
+  firestoreCache
+    .dedupe("fetch_matches", async () => {
+      const colRef = collection(db, COLL_MATCHES);
+      const q = query(colRef, limit(200));
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        return initial;
       }
-    },
-    (err) => {
-      console.warn("Firestore matches notice:", err);
-      const cached = loadEsportMatches();
-      onUpdate(cached);
+
+      const items: EsportMatch[] = [];
+      snapshot.forEach((d) => items.push({ ...(d.data() as EsportMatch), id: d.id }));
+      items.sort((a, b) => (a.round || 1) - (b.round || 1) || (a.matchNumber || 0) - (b.matchNumber || 0));
+      return items;
+    })
+    .then((fresh) => {
+      if (isCancelled) return;
+      saveEsportMatches(fresh);
+      firestoreCache.set("matches", fresh, DEFAULT_TTLS.MATCHES, MATCHES_KEY);
+      matchesSubscribers.forEach((cb) => {
+        try { cb(fresh); } catch { /* ignore */ }
+      });
+    })
+    .catch((err) => {
+      firestoreCache.isQuotaError(err);
+      console.warn("Matches fetch notice (using cache):", err);
       if (onError) onError(err);
-    }
-  );
+    });
+
+  return () => {
+    isCancelled = true;
+    matchesSubscribers.delete(onUpdate);
+  };
 }
 
 export async function saveMatchCloud(match: EsportMatch): Promise<void> {
+  const current = loadEsportMatches();
+  const updated = current.some((m) => m.id === match.id)
+    ? current.map((m) => (m.id === match.id ? match : m))
+    : [...current, match];
+
+  saveEsportMatches(updated);
+  firestoreCache.set("matches", updated, DEFAULT_TTLS.MATCHES, MATCHES_KEY);
+  matchesSubscribers.forEach((cb) => {
+    try { cb(updated); } catch { /* ignore */ }
+  });
+
   try {
     const docRef = doc(db, COLL_MATCHES, match.id);
     const sanitized = JSON.parse(JSON.stringify(match));
     await setDoc(docRef, sanitized, { merge: true });
   } catch (err) {
-    console.warn("Firestore saveMatchCloud fallback:", err);
+    firestoreCache.isQuotaError(err);
+    console.warn("Firestore saveMatchCloud notice (persisted locally):", err);
   }
 }
 
 export async function deleteMatchCloud(id: string): Promise<void> {
+  const current = loadEsportMatches();
+  const updated = current.filter((m) => m.id !== id);
+
+  saveEsportMatches(updated);
+  firestoreCache.set("matches", updated, DEFAULT_TTLS.MATCHES, MATCHES_KEY);
+  matchesSubscribers.forEach((cb) => {
+    try { cb(updated); } catch { /* ignore */ }
+  });
+
   try {
     const docRef = doc(db, COLL_MATCHES, id);
     await deleteDoc(docRef);
   } catch (err) {
-    console.warn("Firestore deleteMatchCloud fallback:", err);
+    firestoreCache.isQuotaError(err);
+    console.warn("Firestore deleteMatchCloud notice:", err);
   }
 }
 

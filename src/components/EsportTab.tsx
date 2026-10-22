@@ -1877,7 +1877,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
               </div>
 
               {/* Admin quick add */}
-              {isAdmin && (
+              {hasAdminAccess && (
                 <button
                   onClick={onOpenAddTournament}
                   className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-md transition"
@@ -2186,7 +2186,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                     </button>
 
                     {/* Admin Actions */}
-                    {isAdmin && (
+                    {hasAdminAccess && (
                       <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[11px] font-['JetBrains_Mono']">
                         <button
                           onClick={() => handleGenerateBracket(t)}
@@ -3169,8 +3169,9 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                                   className="rounded-lg bg-[#25D366]/20 border border-[#25D366]/40 hover:bg-[#25D366]/30 p-1.5 text-[#25D366] transition active:scale-95"
                                   title="Contacter le joueur sur WhatsApp"
                                 >
-                                <Phone size={12} />
-                              </a>
+                                  <Phone size={12} />
+                                </a>
+                              )}
                             </div>
                           </td>
                           <td className="py-3 px-3">
