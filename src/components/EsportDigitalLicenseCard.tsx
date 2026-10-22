@@ -92,7 +92,7 @@ export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> =
       // Status
       ctx.fillStyle = license.status === "Active" ? "#10B981" : "#F59E0B";
       ctx.font = "bold 12px sans-serif";
-      ctx.fillText(`STATUT : ${license.status.toUpperCase()}`, width - 180, 42);
+      ctx.fillText(`STATUT : ${(license.status || "ACTIVE").toUpperCase()}`, width - 180, 42);
 
       // GamerTag & Full Name
       ctx.fillStyle = "#FFFFFF";
@@ -205,7 +205,7 @@ export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> =
               ) : (
                 <AlertTriangle size={12} className="text-amber-400" />
               )}
-              <span>{license.status.toUpperCase()}</span>
+              <span>{(license.status || "ACTIVE").toUpperCase()}</span>
             </span>
 
             {onDelete && (
@@ -232,12 +232,12 @@ export const EsportDigitalLicenseCard: React.FC<EsportDigitalLicenseCardProps> =
               {license.photoUrl ? (
                 <img
                   src={license.photoUrl}
-                  alt={license.gamerTag}
+                  alt={license.gamerTag || "Joueur"}
                   className="h-full w-full object-cover"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center font-['Orbitron'] text-2xl font-bold text-emerald-400 bg-gradient-to-br from-emerald-950 to-slate-900">
-                  {license.gamerTag.slice(0, 2).toUpperCase()}
+                  {(license.gamerTag || "HG").slice(0, 2).toUpperCase()}
                 </div>
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />

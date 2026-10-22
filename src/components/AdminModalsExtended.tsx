@@ -723,7 +723,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
   const handleFileSelect = async (file: File) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      alert("Veuillez sélectionner un fichier image (JPG, PNG, WebP).");
+      console.warn("Format non supporté: veuillez sélectionner un fichier image (JPG, PNG, WebP).");
       return;
     }
     setIsProcessingImg(true);
@@ -761,20 +761,20 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
 
   useEffect(() => {
     if (editingTournament) {
-      setTitle(editingTournament.title);
-      setGame(editingTournament.game);
-      setCashPrize(editingTournament.cashPrize);
-      setEntryFee(editingTournament.entryFee);
-      setDate(editingTournament.date);
-      setTime(editingTournament.time);
-      setLocation(editingTournament.location);
-      setMaxSlots(editingTournament.maxSlots || 32);
-      setCurrentSlots(editingTournament.currentSlots || 0);
-      setPlatform(editingTournament.platform);
-      setFormat(editingTournament.format);
-      setImage(editingTournament.image);
-      setStatus(editingTournament.status);
-      setRulesText(editingTournament.rules ? editingTournament.rules.join("\n") : "");
+      setTitle(editingTournament.title || "");
+      setGame(editingTournament.game || "EA SPORTS FC 27");
+      setCashPrize(editingTournament.cashPrize || "");
+      setEntryFee(editingTournament.entryFee || "");
+      setDate(editingTournament.date || "");
+      setTime(editingTournament.time || "");
+      setLocation(editingTournament.location || "");
+      setMaxSlots(Number(editingTournament.maxSlots) || 32);
+      setCurrentSlots(Number(editingTournament.currentSlots) || 0);
+      setPlatform(editingTournament.platform || "PlayStation 5");
+      setFormat(editingTournament.format || "1v1 Double Élimination");
+      setImage(editingTournament.image || "");
+      setStatus(editingTournament.status || "Inscriptions ouvertes");
+      setRulesText(Array.isArray(editingTournament.rules) ? editingTournament.rules.join("\n") : "");
     } else {
       setTitle("");
       setGame("EA SPORTS FC 27");
@@ -1347,7 +1347,7 @@ export const CustomTabItemModal: React.FC<CustomTabItemModalProps> = ({
           <div className="flex items-center gap-2">
             <Plus size={18} className="text-[#3E9BFF]" />
             <h3 className="font-['Orbitron'] text-base font-bold text-white">
-              {editingItem ? "MODIFIER L'ÉLÉMENT" : `AJOUTER DANS "${tabTitle.toUpperCase()}"`}
+              {editingItem ? "MODIFIER L'ÉLÉMENT" : `AJOUTER DANS "${(tabTitle || "").toUpperCase()}"`}
             </h3>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-[#7C8798] hover:text-white">

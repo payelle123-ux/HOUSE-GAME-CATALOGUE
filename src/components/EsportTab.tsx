@@ -165,10 +165,24 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     return loadEsportRegistrations();
   });
 
+  const onUpdateRegistrationsRef = useRef(onUpdateRegistrations);
+  useEffect(() => {
+    onUpdateRegistrationsRef.current = onUpdateRegistrations;
+  }, [onUpdateRegistrations]);
+
   // Keep registrations synced if updated from parent
   useEffect(() => {
-    if (propRegistrations) {
-      setRegistrations(propRegistrations);
+    if (propRegistrations && propRegistrations.length > 0) {
+      setRegistrations((prev) => {
+        if (
+          prev.length === propRegistrations.length &&
+          prev[0]?.id === propRegistrations[0]?.id &&
+          prev[0]?.status === propRegistrations[0]?.status
+        ) {
+          return prev;
+        }
+        return propRegistrations;
+      });
     }
   }, [propRegistrations]);
   const [licenses, setLicenses] = useState<EsportLicense[]>(() => {
@@ -191,13 +205,22 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     }
   }, [initialSubView]);
 
-  // Real-time Firestore Subscriptions & Instant Cross-Tab Sync
+  // Real-time Firestore Subscriptions & Instant Cross-Tab Sync (Mounts ONCE)
   useEffect(() => {
     const unsubRegs = subscribeToEsportRegistrations(
       (liveRegs) => {
-        setRegistrations(liveRegs);
+        setRegistrations((prev) => {
+          if (
+            prev.length === liveRegs.length &&
+            prev[0]?.id === liveRegs[0]?.id &&
+            prev[0]?.status === liveRegs[0]?.status
+          ) {
+            return prev;
+          }
+          return liveRegs;
+        });
         saveEsportRegistrations(liveRegs);
-        onUpdateRegistrations?.(liveRegs);
+        onUpdateRegistrationsRef.current?.(liveRegs);
       },
       (err) => console.warn("Registrations sync:", err)
     );
@@ -228,7 +251,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
           if (type === "new-registration" || type === "update-registrations" || type === "update-registration") {
             const reloaded = loadEsportRegistrations();
             setRegistrations(reloaded);
-            onUpdateRegistrations?.(reloaded);
+            onUpdateRegistrationsRef.current?.(reloaded);
           }
           if (type === "new-license" || type === "update-license" || type === "delete-license" || type === "update-licenses") {
             setLicenses(loadEsportLicenses());
@@ -243,7 +266,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       if (e.key === "hg_esport_registrations_v3") {
         const reloaded = loadEsportRegistrations();
         setRegistrations(reloaded);
-        onUpdateRegistrations?.(reloaded);
+        onUpdateRegistrationsRef.current?.(reloaded);
       }
       if (e.key === "hg_esport_licenses_v3") {
         setLicenses(loadEsportLicenses());
@@ -256,7 +279,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       if (!type || type === "new-registration" || type === "update-registrations" || type === "update-registration") {
         const reloaded = loadEsportRegistrations();
         setRegistrations(reloaded);
-        onUpdateRegistrations?.(reloaded);
+        onUpdateRegistrationsRef.current?.(reloaded);
       }
       if (!type || type === "new-license" || type === "update-license" || type === "delete-license" || type === "update-licenses") {
         setLicenses(loadEsportLicenses());
@@ -278,7 +301,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       window.removeEventListener("hg:new-registration", handleCustomReg);
       window.removeEventListener("hg:esport-event", handleCustomReg);
     };
-  }, [onUpdateRegistrations]);
+  }, []);
 
   // Sync when parent tournaments change
   useEffect(() => {
@@ -1325,7 +1348,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       broadcastEsportEvent("update-license", target);
     }
 
-    showToast(`Licence ${licenseId} désormais ${nextStatus.toUpperCase()}`);
+    showToast(`Licence ${licenseId} désormais ${(nextStatus || "Active").toUpperCase()}`);
   };
 
   // Delete License Handlers
@@ -2649,14 +2672,14 @@ export const EsportTab: React.FC<EsportTabProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6 rounded-3xl border border-white/10 bg-[#0E121B]">
                 <div className="flex items-center gap-4">
                   <div className="h-16 w-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 font-['Orbitron'] text-xl font-bold">
-                    {loggedPlayer.gamerTag.slice(0, 2).toUpperCase()}
+                    {(loggedPlayer.gamerTag || "HG").slice(0, 2).toUpperCase()}
                   </div>
                   <div>
                     <h3 className="font-['Orbitron'] text-xl sm:text-2xl font-black text-white">
-                      {loggedPlayer.gamerTag}
+                      {loggedPlayer.gamerTag || "Joueur"}
                     </h3>
                     <p className="font-['Chakra_Petch'] text-xs text-slate-300">
-                      {loggedPlayer.fullName} • Rang : {loggedPlayer.rankTitle} ({loggedPlayer.points} pts)
+                      {loggedPlayer.fullName || "Compétiteur"} • Rang : {loggedPlayer.rankTitle || "Challenger"} ({loggedPlayer.points || 0} pts)
                     </p>
                   </div>
                 </div>
@@ -2675,18 +2698,18 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                   VOTRE CARTE DE LICENCE OFFICIELLE HOUSE GAME ID
                 </h4>
                 {licenses.find(
-                  (l) => l.playerId === loggedPlayer.id || l.gamerTag.toLowerCase() === loggedPlayer.gamerTag.toLowerCase()
+                  (l) => l.playerId === loggedPlayer.id || (l.gamerTag || "").toLowerCase() === (loggedPlayer.gamerTag || "").toLowerCase()
                 ) ? (
                   <EsportDigitalLicenseCard
                     license={
                       licenses.find(
-                        (l) => l.playerId === loggedPlayer.id || l.gamerTag.toLowerCase() === loggedPlayer.gamerTag.toLowerCase()
+                        (l) => l.playerId === loggedPlayer.id || (l.gamerTag || "").toLowerCase() === (loggedPlayer.gamerTag || "").toLowerCase()
                       )!
                     }
                     customLogoUrl={bannerConfig.logoUrl}
                     onDelete={() => {
                       const lic = licenses.find(
-                        (l) => l.playerId === loggedPlayer.id || l.gamerTag.toLowerCase() === loggedPlayer.gamerTag.toLowerCase()
+                        (l) => l.playerId === loggedPlayer.id || (l.gamerTag || "").toLowerCase() === (loggedPlayer.gamerTag || "").toLowerCase()
                       );
                       if (lic) handleRequestDeleteLicense(lic);
                     }}
@@ -2705,7 +2728,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {registrations
-                    .filter((r) => r.gamerTag.toLowerCase() === loggedPlayer.gamerTag.toLowerCase() || r.playerId === loggedPlayer.id)
+                    .filter((r) => (r.gamerTag || "").toLowerCase() === (loggedPlayer.gamerTag || "").toLowerCase() || r.playerId === loggedPlayer.id)
                     .map((r) => (
                       <div key={r.id} className="rounded-2xl border border-white/10 bg-[#0E121B] p-4 space-y-2">
                         <div className="flex items-center justify-between text-xs font-['JetBrains_Mono']">
@@ -2719,7 +2742,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                                 : "bg-rose-500/20 text-rose-400"
                             }`}
                           >
-                            {r.status.toUpperCase()}
+                            {(r.status || "en attente").toUpperCase()}
                           </span>
                         </div>
                         <h5 className="font-['Orbitron'] text-sm font-bold text-white">{r.tournamentTitle}</h5>
@@ -3185,7 +3208,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                                     : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
                                 }`}
                               >
-                                {r.status.toUpperCase()}
+                                {(r.status || "en attente").toUpperCase()}
                               </span>
                               {matchingLic ? (
                                 <span className="text-[10px] text-emerald-300 font-['Orbitron'] font-semibold flex items-center gap-1">

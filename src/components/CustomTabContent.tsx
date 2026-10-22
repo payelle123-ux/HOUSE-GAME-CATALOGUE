@@ -43,7 +43,7 @@ export const CustomTabContent: React.FC<CustomTabContentProps> = ({
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 rounded-full bg-[#3E9BFF] animate-ping" />
             <span className="font-['JetBrains_Mono'] font-bold">
-              GESTION DE L'ONGLET "{tab.title.toUpperCase()}" (ESPACE PRO)
+              GESTION DE L'ONGLET "{(tab.title || "").toUpperCase()}" (ESPACE PRO)
             </span>
           </div>
 

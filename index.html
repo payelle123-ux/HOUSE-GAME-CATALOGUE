@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HOUSE GAME</title>
+    <script>
+      // Suppress Vite HMR WebSocket closed errors in preview iframe (per environment constraints)
+      window.addEventListener('unhandledrejection', function(event) {
+        var reason = event && (event.reason || '');
+        var msg = typeof reason === 'string' ? reason : (reason && reason.message) || '';
+        if (msg.indexOf('WebSocket closed without opened') !== -1 || msg.indexOf('failed to connect to websocket') !== -1) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }, true);
+      window.addEventListener('error', function(event) {
+        var msg = (event && (event.message || (event.error && event.error.message))) || '';
+        if (msg.indexOf('WebSocket closed without opened') !== -1 || msg.indexOf('failed to connect to websocket') !== -1) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }, true);
+    </script>
     <meta name="description" content="HOUSE GAME est un espace dédié au gaming, à l'esport et au divertissement au Cameroun. Gaming sur console et PC, événements, compétitions, VR, rétro gaming, Just Dance, location et bien plus." />
     <!-- Google Search Console Verification -->
     <meta name="google-site-verification" content="wIl80yo5_CSfP2S0Ma3mWjUWW7KpwYmBT1l8zuWCeF0" />

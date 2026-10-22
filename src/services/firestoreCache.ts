@@ -217,19 +217,18 @@ export class SingletonSubscription<T> {
   ): () => void {
     this.subscribers.add(onUpdate);
 
-    // Immediately deliver cached or current data if available (zero latency)
-    if (this.currentData !== null) {
-      try {
-        onUpdate(this.currentData);
-      } catch (err) {
-        console.warn(`[SingletonSubscription ${this.key}] initial emit err:`, err);
-      }
-    } else if (cachedInitial !== undefined && cachedInitial !== null) {
-      try {
-        onUpdate(cachedInitial);
-      } catch {
-        // ignore
-      }
+    // Deliver cached or current data asynchronously via microtask (prevents nested setState during render)
+    const initialToSend = this.currentData !== null ? this.currentData : cachedInitial;
+    if (initialToSend !== undefined && initialToSend !== null) {
+      queueMicrotask(() => {
+        if (this.subscribers.has(onUpdate)) {
+          try {
+            onUpdate(initialToSend);
+          } catch (err) {
+            console.warn(`[SingletonSubscription ${this.key}] initial emit err:`, err);
+          }
+        }
+      });
     }
 
     // Start underlying Firestore listener if this is the first subscriber

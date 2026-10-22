@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Plus,
   ArrowUpDown,
@@ -198,7 +198,25 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>(() => loadProducts());
   const [shopInfo, setShopInfo] = useState<ShopInfo>(() => loadShopInfo());
   const [cart, setCart] = useState<CartItem[]>(() => loadCart());
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem("hg_is_admin") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const handleSetIsAdmin = useCallback((val: boolean) => {
+    setIsAdmin(val);
+    try {
+      if (val) {
+        sessionStorage.setItem("hg_is_admin", "true");
+        sessionStorage.setItem("hg_esport_admin_unlocked", "true");
+      } else {
+        sessionStorage.removeItem("hg_is_admin");
+        sessionStorage.removeItem("hg_esport_admin_unlocked");
+      }
+    } catch {}
+  }, []);
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(true);
 
   // New Tab Data States
@@ -218,6 +236,21 @@ export default function App() {
   const [newRegAlert, setNewRegAlert] = useState<EsportRegistration | null>(null);
   const knownRegIdsRef = useRef<Set<string>>(new Set(loadEsportRegistrations().map((r) => r.id)));
   const isInitialMountRef = useRef(true);
+
+  // Stable callback for updating esport registrations
+  const handleUpdateRegistrations = useCallback((regs: EsportRegistration[]) => {
+    setEsportRegistrations((prev) => {
+      if (
+        prev.length === regs.length &&
+        prev[0]?.id === regs[0]?.id &&
+        prev[0]?.status === regs[0]?.status
+      ) {
+        return prev;
+      }
+      saveEsportRegistrations(regs);
+      return regs;
+    });
+  }, []);
 
   // Shop Filters & Search
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -1023,7 +1056,7 @@ export default function App() {
         isAdmin={isAdmin}
         cartCount={totalCartCount}
         onOpenLogin={() => setIsLoginOpen(true)}
-        onLogoutAdmin={() => setIsAdmin(false)}
+        onLogoutAdmin={() => handleSetIsAdmin(false)}
         onOpenCart={() => setIsCartOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
@@ -1296,13 +1329,10 @@ export default function App() {
               tournaments={tournaments}
               shopInfo={shopInfo}
               isAdmin={isAdmin}
-              onUnlockAdmin={() => setIsAdmin(true)}
-              onLogoutAdmin={() => setIsAdmin(false)}
+              onUnlockAdmin={() => handleSetIsAdmin(true)}
+              onLogoutAdmin={() => handleSetIsAdmin(false)}
               registrations={esportRegistrations}
-              onUpdateRegistrations={(regs) => {
-                setEsportRegistrations(regs);
-                saveEsportRegistrations(regs);
-              }}
+              onUpdateRegistrations={handleUpdateRegistrations}
               targetTournamentId={targetTournamentId}
               onClearTargetTournament={() => setTargetTournamentId(null)}
               initialSubView={esportInitialSubView}
@@ -1386,7 +1416,7 @@ export default function App() {
       <LoginModal
         isOpen={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
-        onSuccess={() => setIsAdmin(true)}
+        onSuccess={() => handleSetIsAdmin(true)}
         expectedPin={shopInfo.adminPin || "4826"}
       />
 

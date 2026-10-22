@@ -186,7 +186,14 @@ export function loadEsportRegistrations(): EsportRegistration[] {
       return [];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const list = Array.isArray(parsed) ? parsed : [];
+    return list.map((r) => ({
+      ...r,
+      status: r?.status || "en attente",
+      gamerTag: r?.gamerTag || "Joueur",
+      fullName: r?.fullName || r?.gamerTag || "Joueur",
+      phone: r?.phone || "",
+    }));
   } catch {
     return [];
   }
@@ -209,7 +216,13 @@ export function loadEsportLicenses(): EsportLicense[] {
       return [];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const list = Array.isArray(parsed) ? parsed : [];
+    return list.map((l) => ({
+      ...l,
+      status: l?.status || "Active",
+      gamerTag: l?.gamerTag || "Joueur",
+      fullName: l?.fullName || l?.gamerTag || "Joueur",
+    }));
   } catch {
     return [];
   }
@@ -255,7 +268,13 @@ export function loadEsportPlayers(): EsportPlayer[] {
       return [];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const list = Array.isArray(parsed) ? parsed : [];
+    return list.map((p) => ({
+      ...p,
+      gamerTag: p?.gamerTag || "Joueur",
+      fullName: p?.fullName || p?.gamerTag || "Joueur",
+      rankTitle: p?.rankTitle || "Challenger",
+    }));
   } catch {
     return [];
   }
@@ -730,7 +749,7 @@ export function verifyEsportLicense(
   message: string;
   isStatusActive: boolean;
 } {
-  const query = licenseNumberOrQuery.trim().toUpperCase();
+  const query = String(licenseNumberOrQuery || "").trim().toUpperCase();
   if (!query) {
     return {
       found: false,
@@ -741,9 +760,9 @@ export function verifyEsportLicense(
 
   const match = licenses.find(
     (l) =>
-      l.id.toUpperCase() === query ||
-      l.gamerTag.toUpperCase() === query ||
-      l.playerId.toUpperCase() === query
+      String(l.id || "").toUpperCase() === query ||
+      String(l.gamerTag || "").toUpperCase() === query ||
+      String(l.playerId || "").toUpperCase() === query
   );
 
   if (!match) {
@@ -756,8 +775,8 @@ export function verifyEsportLicense(
 
   const isStatusActive = match.status === "Active";
   const message = isStatusActive
-    ? `Licence officielle certifiée valide pour ${match.gamerTag} (${match.fullName}). Statut : ACTIVE.`
-    : `Attention : cette licence est actuellement ${match.status.toUpperCase()}. Elle n'autorise pas la participation aux tournois officiels.`;
+    ? `Licence officielle certifiée valide pour ${match.gamerTag || "Joueur"} (${match.fullName || "Compétiteur"}). Statut : ACTIVE.`
+    : `Attention : cette licence est actuellement ${String(match.status || "Inconnue").toUpperCase()}. Elle n'autorise pas la participation aux tournois officiels.`;
 
   return {
     found: true,

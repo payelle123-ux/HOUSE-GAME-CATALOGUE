@@ -99,7 +99,13 @@ export const AiGameMaster: React.FC<AiGameMasterProps> = ({
   const [isThinking, setIsThinking] = useState(false);
   const [inputText, setInputText] = useState("");
   const [teaserTipIndex, setTeaserTipIndex] = useState(0);
-  const [showTeaser, setShowTeaser] = useState(true);
+  const [showTeaser, setShowTeaser] = useState(() => {
+    try {
+      return sessionStorage.getItem("hg_ai_teaser_dismissed") !== "true";
+    } catch {
+      return false;
+    }
+  });
   const [quizStep, setQuizStep] = useState<number | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([
@@ -123,24 +129,33 @@ export const AiGameMaster: React.FC<AiGameMasterProps> = ({
     "📍 Nous sommes situés derrière Total Jouvence !",
   ];
 
+  // Auto-dismiss teaser after 8s so it never blocks forms or buttons
+  useEffect(() => {
+    if (!showTeaser) return;
+    const hideTimer = setTimeout(() => {
+      setShowTeaser(false);
+    }, 8000);
+    return () => clearTimeout(hideTimer);
+  }, [showTeaser]);
+
+  // Hide teaser on esport tab to avoid overlaying admin forms
+  useEffect(() => {
+    if (currentTab === "esport") {
+      setShowTeaser(false);
+    }
+  }, [currentTab]);
+
   // Listen for global open event
   useEffect(() => {
     const handleGlobalOpen = () => {
       sfx.playClick();
       setIsOpen(true);
       setIsMinimized(false);
+      setShowTeaser(false);
     };
     window.addEventListener("open-hg-ai", handleGlobalOpen);
     return () => window.removeEventListener("open-hg-ai", handleGlobalOpen);
   }, []);
-
-  // Rotate teaser tips periodically
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTeaserTipIndex((prev) => (prev + 1) % teaserTips.length);
-    }, 9000);
-    return () => clearInterval(timer);
-  }, [teaserTips.length]);
 
   // Auto-scroll chat
   useEffect(() => {

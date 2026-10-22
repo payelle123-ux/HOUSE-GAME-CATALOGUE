@@ -534,7 +534,6 @@ const CampusModuleModal: React.FC<CampusModuleModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      alert("Veuillez renseigner le titre de la formation.");
       return;
     }
 
