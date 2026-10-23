@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { sfx } from "../services/soundEffects";
 import { compressImage } from "../services/storage";
+import { ScrollReveal } from "./ScrollReveal";
 
 interface HgEventTabProps {
   events: HgEventItem[];

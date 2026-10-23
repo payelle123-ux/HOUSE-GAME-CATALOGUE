@@ -64,6 +64,7 @@ import {
 import { EsportDigitalLicenseCard } from "./EsportDigitalLicenseCard";
 import { EsportBracketViewer } from "./EsportBracketViewer";
 import { HouseGameLogo } from "./HouseGameLogo";
+import { ScrollReveal } from "./ScrollReveal";
 import {
   loadEsportTournaments,
   saveEsportTournaments,
@@ -1699,175 +1700,22 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       )}
 
       {/* HIDDEN FILE INPUTS FOR DIRECT ONE-CLICK UPLOADS */}
-      <input
-        ref={logoInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/svg+xml,image/webp"
-        className="hidden"
-        onChange={handleQuickLogoUpload}
-      />
-      <input
-        ref={bannerBgInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleQuickBgUpload}
-      />
-
-      {/* TOP HERO BANNER */}
-      <section className="relative overflow-hidden rounded-3xl border border-emerald-500/30 bg-[#090D15] p-6 sm:p-10 shadow-2xl transition-all">
-        {/* Optional Custom Background Image with Gaming Cyber Overlay */}
-        {bannerConfig.bgImageUrl ? (
-          <div
-            className="absolute inset-0 bg-cover bg-center transition-all duration-700"
-            style={{ backgroundImage: `url(${bannerConfig.bgImageUrl})` }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-[#07090F]/95 via-[#090D15]/85 to-[#0E1422]/90 backdrop-blur-[1px]" />
-          </div>
-        ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-[#090D15] via-[#0E1422] to-[#07090F]">
-            <div className="pointer-events-none absolute -top-32 -right-32 h-96 w-96 rounded-full bg-[#00FF88]/15 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-[#3E9BFF]/15 blur-3xl" />
-          </div>
-        )}
-
-        <div className="relative z-10 space-y-6">
-          {/* Top Bar: Official Badge + Customization Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-1 text-xs font-['JetBrains_Mono'] font-bold text-[#00FF88] shadow-sm">
-              <Swords size={14} />
-              <span>{bannerConfig.badgeText || "CIRCUIT OFFICIEL HOUSE GAME ESPORT • CAMEROUN"}</span>
-            </div>
-
-            {/* Banner Quick Tools */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => logoInputRef.current?.click()}
-                disabled={isUploadingLogo}
-                title="Choisir et importer votre logo depuis votre ordinateur"
-                className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-emerald-300 transition active:scale-95 disabled:opacity-50"
-              >
-                <Camera size={13} />
-                <span>{isUploadingLogo ? "Chargement..." : bannerConfig.logoUrl ? "Changer le logo" : "Mettre mon logo"}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={openBannerCustomizer}
-                title="Modifier les détails de la bannière et le logo"
-                className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-slate-300 hover:text-white transition active:scale-95"
-              >
-                <Sliders size={13} />
-                <span>Personnaliser bannière</span>
-              </button>
-
-              {(bannerConfig.logoUrl || bannerConfig.bgImageUrl) && (
-                <button
-                  type="button"
-                  onClick={handleResetBanner}
-                  title="Réinitialiser le logo et le fond"
-                  className="rounded-xl border border-white/10 bg-white/5 hover:bg-rose-500/20 px-2.5 py-1.5 text-xs text-slate-400 hover:text-rose-300 transition"
-                >
-                  <RotateCcw size={13} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Banner Main Grid: Logo Emblem + Title & Text */}
-          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-8">
-            {/* LOGO EMBLEM DISPLAY AREA */}
-            <div className="relative group shrink-0">
-              <div className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-emerald-500/40 bg-[#0A0D16]/90 p-3 sm:p-4 shadow-[0_0_25px_rgba(0,255,136,0.2)] backdrop-blur-md min-w-[140px] sm:min-w-[170px] min-h-[140px] sm:min-h-[170px] transition group-hover:border-emerald-400">
-                {bannerConfig.logoUrl ? (
-                  <div className="flex flex-col items-center justify-center p-1">
-                    <img
-                      src={bannerConfig.logoUrl}
-                      alt="Logo House Game Esport"
-                      className="max-h-24 sm:max-h-28 max-w-[150px] sm:max-w-[170px] object-contain drop-shadow-[0_0_15px_rgba(0,255,136,0.5)]"
-                    />
-                    <span className="mt-2 text-[9px] font-['Orbitron'] font-bold text-emerald-400 tracking-wider">
-                      LOGO ESPORT
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-center p-2">
-                    <HouseGameLogo size={70} showSlogan={false} className="drop-shadow-md" />
-                    <span className="mt-1 font-['Orbitron'] text-[10px] font-black text-white">
-                      HOUSE <span className="text-[#FF4438]">GAME</span>
-                    </span>
-                    <span className="font-['JetBrains_Mono'] text-[9px] text-emerald-400 font-bold">
-                      ESPORT
-                    </span>
-                  </div>
-                )}
-
-                {/* Hover overlay with button to change logo */}
-                <div
-                  onClick={() => logoInputRef.current?.click()}
-                  className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer p-2 text-center"
-                >
-                  <Camera size={20} className="text-emerald-400 mb-1" />
-                  <span className="font-['Orbitron'] text-[10px] font-bold text-white">
-                    {bannerConfig.logoUrl ? "Changer le logo" : "Mettre votre logo"}
-                  </span>
-                  <span className="font-['JetBrains_Mono'] text-[8px] text-slate-300 mt-0.5">
-                    PNG, JPG, SVG
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Typography Content */}
-            <div className="flex-1 space-y-3">
-              <div className="font-['Orbitron'] text-xs sm:text-sm font-bold tracking-widest text-emerald-400 uppercase">
-                // {bannerConfig.subtitle || "HOUSE GAME ESPORT"}
-              </div>
-
-              <h1 className="font-['Orbitron'] text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
-                {bannerConfig.title || "ARÈNE OFFICIELLE, TOURNOIS & CASH PRIZES GARANTIS"}
-              </h1>
-
-              <p className="font-['Chakra_Petch'] text-sm sm:text-base text-slate-300 leading-relaxed max-w-3xl">
-                {bannerConfig.description ||
-                  "Plateforme officielle de compétition de jeux vidéo au Cameroun. Retrouvez les championnats majeurs sur EA SPORTS FC 27, Tekken 8 et Naruto Storm Connections. Inscrivez-vous, obtenez votre licence numérique certifiée HOUSE GAME ID, suivez les scores en direct et hissez-vous au sommet du classement."}
-              </p>
-            </div>
-          </div>
-
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 font-['JetBrains_Mono'] text-xs">
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <span className="text-[10px] text-slate-400 block">TOURNOIS OFFICIELS</span>
-              <strong className="font-['Orbitron'] text-base sm:text-lg text-white">
-                {tournamentsList.length} Compétition{tournamentsList.length > 1 ? "s" : ""}
-              </strong>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <span className="text-[10px] text-slate-400 block">CASH PRIZE TOTAL</span>
-              <strong className="font-['Orbitron'] text-base sm:text-lg text-amber-400">
-                {totalCashPrizeFormatted}
-              </strong>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <span className="text-[10px] text-slate-400 block">LICENCES ÉMISES</span>
-              <strong className="font-['Orbitron'] text-base sm:text-lg text-[#00FF88]">
-                {licenses.filter((l) => l.status === "Active").length} Active{licenses.filter((l) => l.status === "Active").length > 1 ? "s" : ""}
-              </strong>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <span className="text-[10px] text-slate-400 block">MATCHS ENREGISTRÉS</span>
-              <strong className="font-['Orbitron'] text-base sm:text-lg text-[#3E9BFF]">
-                {matches.length} Rencontre{matches.length > 1 ? "s" : ""}
-              </strong>
-            </div>
-          </div>
-        </div>
-      </section>
+      <div className="hidden" aria-hidden="true">
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/svg+xml,image/webp"
+          className="hidden"
+          onChange={handleQuickLogoUpload}
+        />
+        <input
+          ref={bannerBgInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleQuickBgUpload}
+        />
+      </div>
 
       {/* SUB-NAVIGATION BAR (6 Core Views) */}
       <nav
@@ -2046,7 +1894,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredTournaments.map((t) => {
+              {filteredTournaments.map((t, idx) => {
                 const validatedCount = registrations.filter(
                   (r) => r.tournamentId === t.id && r.status === "validée"
                 ).length;
@@ -2062,222 +1910,224 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                 const isOpen = t.status === "Inscriptions ouvertes" && !isFull;
 
               return (
-                <div
-                  key={t.id}
-                  id={`tournament-${t.id}`}
-                  className={`group relative flex flex-col justify-between overflow-hidden rounded-3xl border transition-all duration-500 ${
-                    highlightedTournamentId === t.id
-                      ? "border-emerald-400 bg-[#121926] ring-4 ring-emerald-500/50 shadow-[0_0_40px_rgba(0,255,136,0.35)] scale-[1.01]"
-                      : "border-white/10 bg-[#0E121B] shadow-2xl hover:border-emerald-500/50 hover:bg-[#121723]"
-                  }`}
-                >
-                  {/* Deep link active banner */}
-                  {highlightedTournamentId === t.id && (
-                    <div className="flex items-center justify-between gap-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 px-4 py-2 text-xs font-['JetBrains_Mono'] font-bold text-white shadow-md animate-pulse">
-                      <div className="flex items-center gap-1.5">
-                        <Sparkles size={14} className="text-[#00FF88]" />
-                        <span>TOURNOI SÉLECTIONNÉ VIA LE LIEN PARTAGÉ</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setHighlightedTournamentId(null)}
-                        className="text-white/80 hover:text-white p-0.5 rounded hover:bg-black/20"
-                        title="Fermer la mise en avant"
-                      >
-                        <X size={13} />
-                      </button>
-                    </div>
-                  )}
-
-                  <div>
-                    {/* Top Image Banner */}
-                    <div className="relative h-48 w-full overflow-hidden bg-slate-900">
-                      <img
-                        src={t.image || "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80"}
-                        alt={t.title}
-                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#0E121B] via-black/40 to-black/60" />
-
-                      {/* Badges */}
-                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-                        <span className="rounded-lg border border-[#3E9BFF]/40 bg-black/80 px-2.5 py-1 font-['JetBrains_Mono'] text-[10px] font-bold text-[#3E9BFF] backdrop-blur-md">
-                          {t.game}
-                        </span>
-
-                        <span
-                          className={`rounded-lg border px-2.5 py-1 font-['JetBrains_Mono'] text-[10px] font-bold backdrop-blur-md ${
-                            isOpen
-                              ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                              : isClosed
-                              ? "border-slate-600 bg-slate-800 text-slate-400"
-                              : "border-amber-500/50 bg-amber-500/20 text-amber-300"
-                          }`}
-                        >
-                          {t.status}
-                        </span>
-                      </div>
-
-                      {/* Cash Prize */}
-                      <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
-                        <div>
-                          <div className="text-[10px] font-bold font-['JetBrains_Mono'] text-slate-400">
-                            CASH PRIZE GARANTI
-                          </div>
-                          <div className="font-['Orbitron'] text-xl font-black text-amber-400 drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]">
-                            {t.cashPrize}
-                          </div>
+                <ScrollReveal key={t.id} delay={(idx % 6) * 75} direction="up">
+                  <div
+                    id={`tournament-${t.id}`}
+                    className={`group relative flex flex-col justify-between overflow-hidden rounded-3xl border transition-all duration-500 card-gaming-interactive hud-box h-full ${
+                      highlightedTournamentId === t.id
+                        ? "border-emerald-400 bg-[#121926] ring-4 ring-emerald-500/50 shadow-[0_0_40px_rgba(0,255,136,0.35)] scale-[1.01]"
+                        : "border-white/10 bg-[#0E121B] shadow-2xl hover:border-emerald-500/50 hover:bg-[#121723]"
+                    }`}
+                  >
+                    {/* Deep link active banner */}
+                    {highlightedTournamentId === t.id && (
+                      <div className="flex items-center justify-between gap-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 px-4 py-2 text-xs font-['JetBrains_Mono'] font-bold text-white shadow-md animate-pulse">
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles size={14} className="text-[#00FF88]" />
+                          <span>TOURNOI SÉLECTIONNÉ VIA LE LIEN PARTAGÉ</span>
                         </div>
-
-                        <div className="text-right">
-                          <div className="text-[10px] font-bold font-['JetBrains_Mono'] text-slate-400">
-                            INSCRIPTION
-                          </div>
-                          <div className="font-['JetBrains_Mono'] text-xs font-bold text-white">
-                            {t.entryFee}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Content Details */}
-                    <div className="p-5 space-y-4">
-                      <div>
-                        <h3 className="font-['Orbitron'] text-base font-bold text-white leading-snug group-hover:text-emerald-400 transition-colors">
-                          {t.title}
-                        </h3>
-                        {t.description && (
-                          <p className="mt-1 font-['Chakra_Petch'] text-xs text-slate-300 line-clamp-2 leading-relaxed">
-                            {t.description}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Meta Grid */}
-                      <div className="space-y-1.5 font-['JetBrains_Mono'] text-xs text-slate-300">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={13} className="text-emerald-400 shrink-0" />
-                          <span>{t.date} ({t.time})</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MapPin size={13} className="text-[#FF4438] shrink-0" />
-                          <span className="truncate">{t.location}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Gamepad2 size={13} className="text-[#3E9BFF] shrink-0" />
-                          <span>{t.platform} • {t.format}</span>
-                        </div>
-                      </div>
-
-                      {/* Slots Bar */}
-                      <div className="space-y-1.5 font-['JetBrains_Mono'] text-xs">
-                        <div className="flex justify-between items-center text-[11px] text-slate-400">
-                          <span className="flex items-center gap-1.5">
-                            <span>Places réservées :</span>
-                            {pendingCount > 0 && (
-                              <span
-                                title={`${pendingCount} inscription(s) en attente de validation`}
-                                className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-bold text-amber-300 animate-pulse"
-                              >
-                                +{pendingCount} en attente
-                              </span>
-                            )}
-                          </span>
-                          <div className="text-right">
-                            <strong className="text-emerald-400 font-bold">
-                              {currentSlots} / {maxSlots} joueurs
-                            </strong>
-                            <span className="text-slate-400 text-[10px] ml-1">
-                              ({remainingSlots} place{remainingSlots > 1 ? "s" : ""} restante{remainingSlots > 1 ? "s" : ""})
-                            </span>
-                          </div>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              isFull
-                                ? "bg-gradient-to-r from-amber-500 to-rose-500"
-                                : "bg-gradient-to-r from-emerald-500 to-[#00FF88]"
-                            }`}
-                            style={{ width: `${slotsPercent}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions Bottom */}
-                  <div className="p-5 pt-0 space-y-2.5">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleOpenRegister(t)}
-                        disabled={isClosed}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:from-emerald-500 hover:to-teal-500 transition active:scale-95 disabled:opacity-40"
-                      >
-                        <Trophy size={14} />
-                        <span>{isFull ? "Tournoi complet" : "S'inscrire au tournoi"}</span>
-                      </button>
-
-                      {/* Share Tournament Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenShareModal(t)}
-                        title="Partager le lien de ce tournoi avec votre communauté (WhatsApp, réseaux, QR code)"
-                        className="flex items-center justify-center rounded-xl border border-[#3E9BFF]/40 bg-[#3E9BFF]/15 hover:bg-[#3E9BFF]/25 p-3 text-[#3E9BFF] hover:text-white transition active:scale-95 shadow-sm"
-                      >
-                        <Share2 size={16} />
-                      </button>
-
-                      <button
-                        onClick={() => setViewingRulesTournament(t)}
-                        title="Voir le règlement complet"
-                        className="rounded-xl border border-white/10 bg-white/5 p-3 text-slate-300 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-white transition"
-                      >
-                        <Info size={16} />
-                      </button>
-                    </div>
-
-                    {/* Quick Link to Bracket */}
-                    <button
-                      onClick={() => {
-                        setSelectedBracketTournamentId(t.id);
-                        setSubView("brackets");
-                      }}
-                      className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/10 py-1.5 text-[11px] font-['JetBrains_Mono'] text-slate-400 hover:text-white transition"
-                    >
-                      <Swords size={12} className="text-[#3E9BFF]" />
-                      <span>Consulter l'arbre des matchs</span>
-                    </button>
-
-                    {/* Admin Actions */}
-                    {hasAdminAccess && (
-                      <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[11px] font-['JetBrains_Mono']">
                         <button
-                          onClick={() => handleGenerateBracket(t)}
-                          className="text-emerald-400 hover:underline flex items-center gap-1"
+                          type="button"
+                          onClick={() => setHighlightedTournamentId(null)}
+                          className="text-white/80 hover:text-white p-0.5 rounded hover:bg-black/20"
+                          title="Fermer la mise en avant"
                         >
-                          <Sparkles size={11} />
-                          <span>Générer arbre</span>
+                          <X size={13} />
                         </button>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => onEditTournament(t)}
-                            className="text-amber-400 hover:underline"
-                          >
-                            Modifier
-                          </button>
-                          <span className="text-white/20">•</span>
-                          <button
-                            onClick={() => onDeleteTournament(t)}
-                            className="text-rose-400 hover:underline"
-                          >
-                            Supprimer
-                          </button>
-                        </div>
                       </div>
                     )}
+
+                    <div>
+                      {/* Top Image Banner */}
+                      <div className="relative h-48 w-full overflow-hidden bg-slate-900">
+                        <img
+                          src={t.image || "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=80"}
+                          alt={t.title}
+                          className="h-full w-full object-cover img-gaming-zoom"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0E121B] via-black/40 to-black/60" />
+
+                        {/* Badges */}
+                        <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+                          <span className="rounded-lg border border-[#3E9BFF]/40 bg-black/80 px-2.5 py-1 font-['JetBrains_Mono'] text-[10px] font-bold text-[#3E9BFF] backdrop-blur-md">
+                            {t.game}
+                          </span>
+
+                          <span
+                            className={`rounded-lg border px-2.5 py-1 font-['JetBrains_Mono'] text-[10px] font-bold backdrop-blur-md flex items-center gap-1.5 ${
+                              isOpen
+                                ? "border-emerald-500/60 bg-emerald-500/20 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.35)]"
+                                : isClosed
+                                ? "border-slate-600 bg-slate-800 text-slate-400"
+                                : "border-amber-500/50 bg-amber-500/20 text-amber-300"
+                            }`}
+                          >
+                            {isOpen && <span className="h-1.5 w-1.5 rounded-full bg-[#00FF88] badge-live-pulse" />}
+                            <span>{t.status}</span>
+                          </span>
+                        </div>
+
+                        {/* Cash Prize */}
+                        <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
+                          <div>
+                            <div className="text-[10px] font-bold font-['JetBrains_Mono'] text-slate-400">
+                              CASH PRIZE GARANTI
+                            </div>
+                            <div className="font-['Orbitron'] text-xl font-black text-amber-400 cash-prize-glow">
+                              {t.cashPrize}
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="text-[10px] font-bold font-['JetBrains_Mono'] text-slate-400">
+                              INSCRIPTION
+                            </div>
+                            <div className="font-['JetBrains_Mono'] text-xs font-bold text-white">
+                              {t.entryFee}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Content Details */}
+                      <div className="p-5 space-y-4">
+                        <div>
+                          <h3 className="font-['Orbitron'] text-base font-bold text-white leading-snug group-hover:text-emerald-400 transition-colors">
+                            {t.title}
+                          </h3>
+                          {t.description && (
+                            <p className="mt-1 font-['Chakra_Petch'] text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                              {t.description}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Meta Grid */}
+                        <div className="space-y-1.5 font-['JetBrains_Mono'] text-xs text-slate-300">
+                          <div className="flex items-center gap-2">
+                            <Calendar size={13} className="text-emerald-400 shrink-0" />
+                            <span>{t.date} ({t.time})</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <MapPin size={13} className="text-[#FF4438] shrink-0" />
+                            <span className="truncate">{t.location}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Gamepad2 size={13} className="text-[#3E9BFF] shrink-0" />
+                            <span>{t.platform} • {t.format}</span>
+                          </div>
+                        </div>
+
+                        {/* Slots Bar */}
+                        <div className="space-y-1.5 font-['JetBrains_Mono'] text-xs">
+                          <div className="flex justify-between items-center text-[11px] text-slate-400">
+                            <span className="flex items-center gap-1.5">
+                              <span>Places réservées :</span>
+                              {pendingCount > 0 && (
+                                <span
+                                  title={`${pendingCount} inscription(s) en attente de validation`}
+                                  className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-bold text-amber-300 animate-pulse"
+                                >
+                                  +{pendingCount} en attente
+                                </span>
+                              )}
+                            </span>
+                            <div className="text-right">
+                              <strong className="text-emerald-400 font-bold">
+                                {currentSlots} / {maxSlots} joueurs
+                              </strong>
+                              <span className="text-slate-400 text-[10px] ml-1">
+                                ({remainingSlots} place{remainingSlots > 1 ? "s" : ""} restante{remainingSlots > 1 ? "s" : ""})
+                              </span>
+                            </div>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                isFull
+                                  ? "bg-gradient-to-r from-amber-500 to-rose-500"
+                                  : "bg-gradient-to-r from-emerald-500 to-[#00FF88]"
+                              }`}
+                              style={{ width: `${slotsPercent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions Bottom */}
+                    <div className="p-5 pt-0 space-y-2.5">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleOpenRegister(t)}
+                          disabled={isClosed}
+                          className="btn-tap btn-sheen flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:from-emerald-500 hover:to-teal-500 hover:shadow-[0_0_22px_rgba(16,185,129,0.5)] transition active:scale-95 disabled:opacity-40 cursor-pointer"
+                        >
+                          <Trophy size={14} />
+                          <span>{isFull ? "Tournoi complet" : "S'inscrire au tournoi"}</span>
+                        </button>
+
+                        {/* Share Tournament Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenShareModal(t)}
+                          title="Partager le lien de ce tournoi avec votre communauté (WhatsApp, réseaux, QR code)"
+                          className="btn-tap flex items-center justify-center rounded-xl border border-[#3E9BFF]/40 bg-[#3E9BFF]/15 hover:bg-[#3E9BFF]/25 p-3 text-[#3E9BFF] hover:text-white transition active:scale-95 shadow-sm cursor-pointer"
+                        >
+                          <Share2 size={16} />
+                        </button>
+
+                        <button
+                          onClick={() => setViewingRulesTournament(t)}
+                          title="Voir le règlement complet"
+                          className="btn-tap rounded-xl border border-white/10 bg-white/5 p-3 text-slate-300 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-white transition cursor-pointer"
+                        >
+                          <Info size={16} />
+                        </button>
+                      </div>
+
+                      {/* Quick Link to Bracket */}
+                      <button
+                        onClick={() => {
+                          setSelectedBracketTournamentId(t.id);
+                          setSubView("brackets");
+                        }}
+                        className="btn-tap w-full flex items-center justify-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/10 py-1.5 text-[11px] font-['JetBrains_Mono'] text-slate-400 hover:text-white transition cursor-pointer"
+                      >
+                        <Swords size={12} className="text-[#3E9BFF]" />
+                        <span>Consulter l'arbre des matchs</span>
+                      </button>
+
+                      {/* Admin Actions */}
+                      {hasAdminAccess && (
+                        <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[11px] font-['JetBrains_Mono']">
+                          <button
+                            onClick={() => handleGenerateBracket(t)}
+                            className="text-emerald-400 hover:underline flex items-center gap-1"
+                          >
+                            <Sparkles size={11} />
+                            <span>Générer arbre</span>
+                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => onEditTournament(t)}
+                              className="text-amber-400 hover:underline"
+                            >
+                              Modifier
+                            </button>
+                            <span className="text-white/20">•</span>
+                            <button
+                              onClick={() => onDeleteTournament(t)}
+                              className="text-rose-400 hover:underline"
+                            >
+                              Supprimer
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </ScrollReveal>
               );
             })}
           </div>
@@ -3424,6 +3274,163 @@ export const EsportTab: React.FC<EsportTabProps> = ({
         </section>
         )
       )}
+
+      {/* ========================================================================= */}
+      {/* BANNIÈRE PROMOTIONNELLE & STATISTIQUES ESPORT (BAS DE PAGE)              */}
+      {/* ========================================================================= */}
+      <section className="relative overflow-hidden rounded-3xl border border-emerald-500/30 bg-[#090D15] p-6 sm:p-10 shadow-2xl transition-all">
+        {/* Optional Custom Background Image with Gaming Cyber Overlay */}
+        {bannerConfig.bgImageUrl ? (
+          <div
+            className="absolute inset-0 bg-cover bg-center transition-all duration-700"
+            style={{ backgroundImage: `url(${bannerConfig.bgImageUrl})` }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-[#07090F]/95 via-[#090D15]/85 to-[#0E1422]/90 backdrop-blur-[1px]" />
+          </div>
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-[#090D15] via-[#0E1422] to-[#07090F]">
+            <div className="pointer-events-none absolute -top-32 -right-32 h-96 w-96 rounded-full bg-[#00FF88]/15 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-[#3E9BFF]/15 blur-3xl" />
+          </div>
+        )}
+
+        <div className="relative z-10 space-y-6">
+          {/* Top Bar: Official Badge + Customization Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-1 text-xs font-['JetBrains_Mono'] font-bold text-[#00FF88] shadow-sm">
+              <Swords size={14} />
+              <span>{bannerConfig.badgeText || "CIRCUIT OFFICIEL HOUSE GAME ESPORT • CAMEROUN"}</span>
+            </div>
+
+            {/* Banner Quick Tools */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => logoInputRef.current?.click()}
+                disabled={isUploadingLogo}
+                title="Choisir et importer votre logo depuis votre ordinateur"
+                className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-emerald-300 transition active:scale-95 disabled:opacity-50"
+              >
+                <Camera size={13} />
+                <span>{isUploadingLogo ? "Chargement..." : bannerConfig.logoUrl ? "Changer le logo" : "Mettre mon logo"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={openBannerCustomizer}
+                title="Modifier les détails de la bannière et le logo"
+                className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-slate-300 hover:text-white transition active:scale-95"
+              >
+                <Sliders size={13} />
+                <span>Personnaliser bannière</span>
+              </button>
+
+              {(bannerConfig.logoUrl || bannerConfig.bgImageUrl) && (
+                <button
+                  type="button"
+                  onClick={handleResetBanner}
+                  title="Réinitialiser le logo et le fond"
+                  className="rounded-xl border border-white/10 bg-white/5 hover:bg-rose-500/20 px-2.5 py-1.5 text-xs text-slate-400 hover:text-rose-300 transition"
+                >
+                  <RotateCcw size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Banner Main Grid: Logo Emblem + Title & Text */}
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-8">
+            {/* LOGO EMBLEM DISPLAY AREA */}
+            <div className="relative group shrink-0">
+              <div className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-emerald-500/40 bg-[#0A0D16]/90 p-3 sm:p-4 shadow-[0_0_25px_rgba(0,255,136,0.2)] backdrop-blur-md min-w-[140px] sm:min-w-[170px] min-h-[140px] sm:min-h-[170px] transition group-hover:border-emerald-400">
+                {bannerConfig.logoUrl ? (
+                  <div className="flex flex-col items-center justify-center p-1">
+                    <img
+                      src={bannerConfig.logoUrl}
+                      alt="Logo House Game Esport"
+                      className="max-h-24 sm:max-h-28 max-w-[150px] sm:max-w-[170px] object-contain drop-shadow-[0_0_15px_rgba(0,255,136,0.5)]"
+                    />
+                    <span className="mt-2 text-[9px] font-['Orbitron'] font-bold text-emerald-400 tracking-wider">
+                      LOGO ESPORT
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center p-2">
+                    <HouseGameLogo size={70} showSlogan={false} className="drop-shadow-md" />
+                    <span className="mt-1 font-['Orbitron'] text-[10px] font-black text-white">
+                      HOUSE <span className="text-[#FF4438]">GAME</span>
+                    </span>
+                    <span className="font-['JetBrains_Mono'] text-[9px] text-emerald-400 font-bold">
+                      ESPORT
+                    </span>
+                  </div>
+                )}
+
+                {/* Hover overlay with button to change logo */}
+                <div
+                  onClick={() => logoInputRef.current?.click()}
+                  className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer p-2 text-center"
+                >
+                  <Camera size={20} className="text-emerald-400 mb-1" />
+                  <span className="font-['Orbitron'] text-[10px] font-bold text-white">
+                    {bannerConfig.logoUrl ? "Changer le logo" : "Mettre votre logo"}
+                  </span>
+                  <span className="font-['JetBrains_Mono'] text-[8px] text-slate-300 mt-0.5">
+                    PNG, JPG, SVG
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Typography Content */}
+            <div className="flex-1 space-y-3">
+              <div className="font-['Orbitron'] text-xs sm:text-sm font-bold tracking-widest text-emerald-400 uppercase">
+                // {bannerConfig.subtitle || "HOUSE GAME ESPORT"}
+              </div>
+
+              <h1 className="font-['Orbitron'] text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
+                {bannerConfig.title || "ARÈNE OFFICIELLE, TOURNOIS & CASH PRIZES GARANTIS"}
+              </h1>
+
+              <p className="font-['Chakra_Petch'] text-sm sm:text-base text-slate-300 leading-relaxed max-w-3xl">
+                {bannerConfig.description ||
+                  "Plateforme officielle de compétition de jeux vidéo au Cameroun. Retrouvez les championnats majeurs sur EA SPORTS FC 27, Tekken 8 et Naruto Storm Connections. Inscrivez-vous, obtenez votre licence numérique certifiée HOUSE GAME ID, suivez les scores en direct et hissez-vous au sommet du classement."}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 font-['JetBrains_Mono'] text-xs">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <span className="text-[10px] text-slate-400 block">TOURNOIS OFFICIELS</span>
+              <strong className="font-['Orbitron'] text-base sm:text-lg text-white">
+                {tournamentsList.length} Compétition{tournamentsList.length > 1 ? "s" : ""}
+              </strong>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <span className="text-[10px] text-slate-400 block">CASH PRIZE TOTAL</span>
+              <strong className="font-['Orbitron'] text-base sm:text-lg text-amber-400">
+                {totalCashPrizeFormatted}
+              </strong>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <span className="text-[10px] text-slate-400 block">LICENCES ÉMISES</span>
+              <strong className="font-['Orbitron'] text-base sm:text-lg text-[#00FF88]">
+                {licenses.filter((l) => l.status === "Active").length} Active{licenses.filter((l) => l.status === "Active").length > 1 ? "s" : ""}
+              </strong>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <span className="text-[10px] text-slate-400 block">MATCHS ENREGISTRÉS</span>
+              <strong className="font-['Orbitron'] text-base sm:text-lg text-[#3E9BFF]">
+                {matches.length} Rencontre{matches.length > 1 ? "s" : ""}
+              </strong>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ========================================================================= */}
       {/* MODAL D'INSCRIPTION JOUEUR                                                */}

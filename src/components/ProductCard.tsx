@@ -58,7 +58,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         sfx.playHover();
       }}
       onMouseLeave={() => setIsHovered(false)}
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#12151E] shadow-md transition-all duration-300 hover:-translate-y-1.5 hover:border-[#3E9BFF]/60 hover:shadow-[0_12px_30px_rgba(62,155,255,0.2)] hud-box"
+      className="group relative flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#12151E] shadow-md card-gaming-interactive hud-box"
     >
       {/* Dynamic Cursor Spotlight Overlay */}
       {isHovered && (
@@ -115,7 +115,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             src={product.image}
             alt={product.name}
             loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-108"
+            className="h-full w-full object-cover img-gaming-zoom"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-4xl text-[#7C8798]/30 font-['Orbitron']">
@@ -208,7 +208,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               }}
               onMouseEnter={() => sfx.playHover()}
               disabled={!product.inStock}
-              className="gaming-btn flex items-center justify-center gap-1.5 rounded-lg border border-[#3E9BFF]/30 bg-[#3E9BFF]/10 py-2 font-['JetBrains_Mono'] text-xs font-semibold text-[#3E9BFF] transition hover:border-[#3E9BFF] hover:bg-[#3E9BFF]/25 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="gaming-btn btn-tap flex items-center justify-center gap-1.5 rounded-lg border border-[#3E9BFF]/30 bg-[#3E9BFF]/10 py-2 font-['JetBrains_Mono'] text-xs font-semibold text-[#3E9BFF] transition hover:border-[#3E9BFF] hover:bg-[#3E9BFF]/25 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <ShoppingBag size={14} />
               <span>Panier</span>
@@ -221,7 +221,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               rel="noopener noreferrer"
               onMouseEnter={() => sfx.playHover()}
               onClick={() => sfx.playClick()}
-              className="gaming-btn flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 py-2 font-['JetBrains_Mono'] text-xs font-semibold text-emerald-400 transition hover:border-emerald-400 hover:bg-emerald-500/25 active:scale-95 text-center cursor-pointer"
+              className="gaming-btn btn-tap btn-sheen flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 py-2 font-['JetBrains_Mono'] text-xs font-semibold text-emerald-400 transition hover:border-emerald-400 hover:bg-emerald-500/25 active:scale-95 text-center cursor-pointer shadow-sm hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]"
             >
               <MessageCircle size={14} />
               <span>Commander</span>

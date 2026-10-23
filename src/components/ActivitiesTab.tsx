@@ -42,6 +42,7 @@ import {
   Image,
 } from "lucide-react";
 import { sfx } from "../services/soundEffects";
+import { ScrollReveal } from "./ScrollReveal";
 
 interface ActivitiesTabProps {
   homeContent: HomeContent;
@@ -645,13 +646,13 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
             };
 
             return (
-              <div
-                key={act.id}
-                onMouseEnter={() => sfx.playHover()}
-                className={`relative rounded-2xl border border-white/10 bg-[#0E121B] p-6 flex flex-col justify-between ${styles.borderHover} hover:bg-[#121624] transition-all duration-300 space-y-5 group shadow-lg hud-box hover:-translate-y-2 hover:scale-[1.01] hover:shadow-[0_15px_35px_rgba(0,0,0,0.6)] animate-shimmer`}
-              >
-                {/* Admin Mode Bar on each card */}
-                {isAdmin && (
+              <ScrollReveal key={act.id} delay={(index % 6) * 60} direction="up">
+                <div
+                  onMouseEnter={() => sfx.playHover()}
+                  className={`relative rounded-2xl border border-white/10 bg-[#0E121B] p-6 flex flex-col justify-between ${styles.borderHover} hover:bg-[#121624] space-y-5 group shadow-lg hud-box card-gaming-interactive h-full animate-shimmer`}
+                >
+                  {/* Admin Mode Bar on each card */}
+                  {isAdmin && (
                   <div className="flex items-center justify-between pb-3 border-b border-white/10">
                     <span className="inline-flex items-center gap-1 font-['JetBrains_Mono'] text-[10px] font-bold text-amber-400 uppercase tracking-wider">
                       <ShieldCheck size={12} />
@@ -797,8 +798,9 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
                   </div>
                 </div>
               </div>
-            );
-          })}
+            </ScrollReveal>
+          );
+        })}
         </div>
       </section>
 

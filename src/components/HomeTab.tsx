@@ -263,7 +263,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               }}
               onMouseEnter={() => sfx.playHover()}
               id="cta-shop-btn"
-              className="gaming-btn flex items-center gap-2 rounded-xl border border-[#FF4438]/60 bg-[#FF4438] px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_20px_rgba(255,68,56,0.4)] transition hover:bg-[#ff6459] hover:shadow-[0_0_30px_rgba(255,68,56,0.6)] active:scale-95 cursor-pointer"
+              className="gaming-btn btn-tap btn-sheen flex items-center gap-2 rounded-xl border border-[#FF4438]/60 bg-[#FF4438] px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-[0_0_20px_rgba(255,68,56,0.4)] transition hover:bg-[#ff6459] hover:shadow-[0_0_30px_rgba(255,68,56,0.6)] active:scale-95 cursor-pointer"
             >
               <ShoppingBag size={16} />
               <span>BOUTIQUE</span>
@@ -277,7 +277,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               }}
               onMouseEnter={() => sfx.playHover()}
               id="cta-events-btn"
-              className="gaming-btn flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/15 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-purple-300 transition hover:bg-purple-500/25 hover:border-purple-400 active:scale-95 cursor-pointer"
+              className="gaming-btn btn-tap flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/15 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-purple-300 transition hover:bg-purple-500/25 hover:border-purple-400 active:scale-95 cursor-pointer"
             >
               <Trophy size={16} />
               <span>HG EVENT</span>
@@ -290,7 +290,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               }}
               onMouseEnter={() => sfx.playHover()}
               id="cta-service-btn"
-              className="gaming-btn flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-cyan-300 transition hover:bg-cyan-500/20 hover:border-cyan-400 active:scale-95 cursor-pointer"
+              className="gaming-btn btn-tap flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-cyan-300 transition hover:bg-cyan-500/20 hover:border-cyan-400 active:scale-95 cursor-pointer"
             >
               <Wrench size={16} />
               <span>HG SERVICE</span>
@@ -303,7 +303,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               }}
               onMouseEnter={() => sfx.playHover()}
               id="cta-campus-btn"
-              className="gaming-btn flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-emerald-300 transition hover:bg-emerald-500/20 hover:border-emerald-400 active:scale-95 cursor-pointer"
+              className="gaming-btn btn-tap flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-emerald-300 transition hover:bg-emerald-500/20 hover:border-emerald-400 active:scale-95 cursor-pointer"
             >
               <Sparkles size={16} />
               <span>HG CAMPUS</span>
@@ -317,7 +317,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               }}
               onMouseEnter={() => sfx.playHover()}
               id="cta-ai-master-btn"
-              className="gaming-btn flex items-center gap-2 rounded-xl border border-cyan-400/60 bg-cyan-500/15 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-cyan-200 transition hover:bg-cyan-500/25 hover:border-cyan-300 hover:shadow-[0_0_20px_rgba(0,240,255,0.4)] active:scale-95 cursor-pointer"
+              className="gaming-btn btn-tap btn-sheen flex items-center gap-2 rounded-xl border border-cyan-400/60 bg-cyan-500/15 px-5 py-3 font-['JetBrains_Mono'] text-xs font-bold text-cyan-200 transition hover:bg-cyan-500/25 hover:border-cyan-300 hover:shadow-[0_0_20px_rgba(0,240,255,0.4)] active:scale-95 cursor-pointer"
             >
               <Bot size={16} className="text-cyan-400 animate-pulse" />
               <span>IA GAME MASTER</span>
@@ -351,71 +351,75 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       {/* Section : Qui sommes nous * Nos partenaires */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Qui sommes nous */}
-        <div className="lg:col-span-6 rounded-2xl border border-white/10 bg-[#0E121B] p-6 sm:p-8 flex flex-col justify-between space-y-5">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 font-['JetBrains_Mono'] text-xs text-[#3E9BFF] font-bold">
-              <Users size={16} />
-              <span>QUI SOMMES NOUS</span>
+        <ScrollReveal direction="left" delay={50} className="lg:col-span-6 h-full">
+          <div className="h-full rounded-2xl border border-white/10 bg-[#0E121B] p-6 sm:p-8 flex flex-col justify-between space-y-5 hud-box">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 font-['JetBrains_Mono'] text-xs text-[#3E9BFF] font-bold">
+                <Users size={16} />
+                <span>QUI SOMMES NOUS</span>
+              </div>
+
+              <h2 className="font-['Orbitron'] text-xl sm:text-2xl font-bold text-white leading-tight">
+                L'écosystème de référence gaming & esport
+              </h2>
+
+              <p className="font-['Chakra_Petch'] text-sm text-[#A0AEC0] leading-relaxed">
+                {homeContent.aboutText ||
+                  "House Game est né d'une vision ambitieuse : offrir aux joueurs et passionnés un écosystème 100% dédié au jeu vidéo, fondé sur l'authenticité certifiée, la performance technique et le rassemblement communautaire. Que vous cherchiez la dernière console next-gen scellée d'origine, un accessoire introuvable, une réparation électronique haute précision sous microscope ou une arène pour mesurer vos talents esportifs, l'équipe House Game met son expertise et sa passion au service de votre expérience."}
+              </p>
             </div>
 
-            <h2 className="font-['Orbitron'] text-xl sm:text-2xl font-bold text-white leading-tight">
-              L'écosystème de référence gaming & esport
-            </h2>
-
-            <p className="font-['Chakra_Petch'] text-sm text-[#A0AEC0] leading-relaxed">
-              {homeContent.aboutText ||
-                "House Game est né d'une vision ambitieuse : offrir aux joueurs et passionnés un écosystème 100% dédié au jeu vidéo, fondé sur l'authenticité certifiée, la performance technique et le rassemblement communautaire. Que vous cherchiez la dernière console next-gen scellée d'origine, un accessoire introuvable, une réparation électronique haute précision sous microscope ou une arène pour mesurer vos talents esportifs, l'équipe House Game met son expertise et sa passion au service de votre expérience."}
-            </p>
+            <div className="pt-2">
+              <button
+                onClick={() => onNavigateTab("activities")}
+                className="btn-tap inline-flex items-center gap-2 text-xs font-bold font-['JetBrains_Mono'] text-[#3E9BFF] hover:text-white transition-colors cursor-pointer"
+              >
+                <span>Découvrir toutes nos activités</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
           </div>
-
-          <div className="pt-2">
-            <button
-              onClick={() => onNavigateTab("activities")}
-              className="inline-flex items-center gap-2 text-xs font-bold font-['JetBrains_Mono'] text-[#3E9BFF] hover:text-white transition-colors"
-            >
-              <span>Découvrir toutes nos activités</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
+        </ScrollReveal>
 
         {/* Nos partenaires */}
-        <div className="lg:col-span-6 rounded-2xl border border-white/10 bg-[#0E121B] p-6 sm:p-8 flex flex-col justify-between space-y-4">
-          <div>
-            <div className="inline-flex items-center gap-2 font-['JetBrains_Mono'] text-xs text-amber-400 font-bold mb-3">
-              <Award size={16} />
-              <span>NOS PARTENAIRES</span>
+        <ScrollReveal direction="right" delay={120} className="lg:col-span-6 h-full">
+          <div className="h-full rounded-2xl border border-white/10 bg-[#0E121B] p-6 sm:p-8 flex flex-col justify-between space-y-4 hud-box">
+            <div>
+              <div className="inline-flex items-center gap-2 font-['JetBrains_Mono'] text-xs text-amber-400 font-bold mb-3">
+                <Award size={16} />
+                <span>NOS PARTENAIRES</span>
+              </div>
+
+              <h3 className="font-['Orbitron'] text-xl font-bold text-white mb-2">
+                Des alliances avec les leaders de l'industrie
+              </h3>
+              <p className="font-['Chakra_Petch'] text-xs text-[#7C8798] mb-4">
+                Garantie d'authenticité matérielle, connectivité satellite ultra-rapide et collaborations exclusives.
+              </p>
             </div>
 
-            <h3 className="font-['Orbitron'] text-xl font-bold text-white mb-2">
-              Des alliances avec les leaders de l'industrie
-            </h3>
-            <p className="font-['Chakra_Petch'] text-xs text-[#7C8798] mb-4">
-              Garantie d'authenticité matérielle, connectivité satellite ultra-rapide et collaborations exclusives.
-            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {homeContent.partners?.map((partner, pIdx) => (
+                <div
+                  key={pIdx}
+                  className="p-3 rounded-xl border border-white/5 bg-[#141824] hover:border-[#3E9BFF]/40 transition-all flex flex-col items-center text-center group card-gaming-interactive cursor-default"
+                >
+                  <img
+                    src={partner.logo}
+                    alt={partner.name}
+                    className="w-10 h-10 rounded-lg object-cover mb-2 border border-white/10 img-gaming-zoom"
+                  />
+                  <span className="font-['Orbitron'] text-xs font-bold text-white line-clamp-1">
+                    {partner.name}
+                  </span>
+                  <span className="text-[10px] font-['JetBrains_Mono'] text-[#7C8798] line-clamp-1 mt-0.5">
+                    {partner.category}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {homeContent.partners?.map((partner, pIdx) => (
-              <div
-                key={pIdx}
-                className="p-3 rounded-xl border border-white/5 bg-[#141824] hover:border-white/20 transition-all flex flex-col items-center text-center group"
-              >
-                <img
-                  src={partner.logo}
-                  alt={partner.name}
-                  className="w-10 h-10 rounded-lg object-cover mb-2 border border-white/10 group-hover:scale-105 transition-transform"
-                />
-                <span className="font-['Orbitron'] text-xs font-bold text-white line-clamp-1">
-                  {partner.name}
-                </span>
-                <span className="text-[10px] font-['JetBrains_Mono'] text-[#7C8798] line-clamp-1 mt-0.5">
-                  {partner.category}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        </ScrollReveal>
       </section>
 
       {/* ========================================================= */}

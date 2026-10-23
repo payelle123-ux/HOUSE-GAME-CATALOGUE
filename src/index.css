@@ -306,6 +306,110 @@ html {
 }
 
 /* ==========================================================================
+   ADVANCED MOTION & GAMING UI ENHANCEMENTS
+   ========================================================================== */
+
+/* Cash Prize Pulsing Glow */
+@keyframes cashGlowPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.45));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 18px rgba(245, 158, 11, 0.85));
+    transform: scale(1.02);
+  }
+}
+
+.cash-prize-glow {
+  animation: cashGlowPulse 2.4s ease-in-out infinite;
+  display: inline-block;
+}
+
+/* Live Badge Glow Dot */
+@keyframes liveDotPulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.badge-live-pulse {
+  animation: liveDotPulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Interactive Card Elevation & Glow */
+.card-gaming-interactive {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s ease;
+  will-change: transform, box-shadow;
+}
+
+.card-gaming-interactive:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(62, 155, 255, 0.22);
+}
+
+.card-gaming-interactive:active {
+  transform: translateY(-2px) scale(0.995);
+}
+
+/* Subtle image scale on card hover */
+.img-gaming-zoom {
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s ease;
+}
+
+.group:hover .img-gaming-zoom {
+  transform: scale(1.045);
+}
+
+/* Primary Button Ambient Sheen */
+.btn-sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-sheen::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 50%;
+  height: 200%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transform: skewX(-20deg);
+  transition: left 0.75s ease-in-out;
+  pointer-events: none;
+}
+
+.btn-sheen:hover::after {
+  left: 130%;
+}
+
+/* Smooth Tap Feedback for all interactive elements */
+.btn-tap {
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
+}
+
+.btn-tap:active {
+  transform: scale(0.965);
+}
+
+/* ==========================================================================
    ACCESSIBILITY: PREFERS-REDUCED-MOTION
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {

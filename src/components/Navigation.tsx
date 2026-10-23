@@ -128,7 +128,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                   sfx.playTabSwitch();
                   onSelectTab(tab.id);
                 }}
-                className={`group relative flex flex-shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 active:scale-95 cursor-pointer ${
+                className={`group relative flex flex-shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 btn-tap cursor-pointer ${
                   isActive
                     ? "border border-[#FF4438]/60 bg-gradient-to-r from-[#FF4438]/25 to-[#3E9BFF]/15 text-white shadow-[0_0_20px_rgba(255,68,56,0.3)] scale-[1.02]"
                     : "border border-white/5 bg-white/[0.02] text-[#7C8798] hover:border-[#3E9BFF]/30 hover:bg-white/[0.06] hover:text-white"
@@ -157,7 +157,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 )}
 
                 {isActive && (
-                  <span className="absolute -bottom-2.5 left-1/2 h-[3.5px] w-10 -translate-x-1/2 rounded-t-full bg-gradient-to-r from-[#FF4438] via-purple-500 to-[#3E9BFF] shadow-[0_0_12px_#FF4438] animate-pulse" />
+                  <span className="absolute -bottom-2.5 left-1/2 h-[3.5px] w-12 -translate-x-1/2 rounded-t-full bg-gradient-to-r from-[#FF4438] via-purple-500 to-[#3E9BFF] shadow-[0_0_14px_#FF4438] animate-pulse" />
                 )}
               </button>
             );
@@ -177,7 +177,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                   sfx.playTabSwitch();
                   onSelectTab(tab.id);
                 }}
-                className={`group relative flex flex-shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 active:scale-95 cursor-pointer ${
+                className={`group relative flex flex-shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold transition-all duration-200 hover:-translate-y-0.5 btn-tap cursor-pointer ${
                   isActive
                     ? "border border-[#3E9BFF]/70 bg-gradient-to-r from-[#3E9BFF]/25 to-purple-600/25 text-white shadow-[0_0_20px_rgba(62,155,255,0.35)] scale-[1.02]"
                     : "border border-white/5 bg-white/[0.02] text-[#7C8798] hover:border-[#3E9BFF]/30 hover:bg-white/[0.06] hover:text-white"

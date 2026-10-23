@@ -4,7 +4,8 @@ interface ScrollRevealProps {
   children: React.ReactNode;
   className?: string;
   delay?: number; // milliseconds
-  direction?: "up" | "down" | "left" | "right" | "none";
+  duration?: number; // milliseconds
+  direction?: "up" | "down" | "left" | "right" | "zoom" | "none";
   threshold?: number;
 }
 
@@ -12,13 +13,25 @@ export const ScrollReveal: React.FC<ScrollRevealProps> = ({
   children,
   className = "",
   delay = 0,
+  duration = 550,
   direction = "up",
-  threshold = 0.1,
+  threshold = 0.08,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const domRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Respect user's motion preferences
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setIsVisible(true);
+      return;
+    }
+
+    if (!("IntersectionObserver" in window)) {
+      setIsVisible(true);
+      return;
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -32,7 +45,7 @@ export const ScrollReveal: React.FC<ScrollRevealProps> = ({
       },
       {
         threshold,
-        rootMargin: "0px 0px -40px 0px",
+        rootMargin: "0px 0px -30px 0px",
       }
     );
 
@@ -51,17 +64,19 @@ export const ScrollReveal: React.FC<ScrollRevealProps> = ({
 
     switch (direction) {
       case "up":
-        return "translate-y-8 opacity-0";
+        return "translate-y-6 opacity-0";
       case "down":
-        return "-translate-y-8 opacity-0";
+        return "-translate-y-6 opacity-0";
       case "left":
-        return "-translate-x-8 opacity-0";
+        return "-translate-x-6 opacity-0";
       case "right":
-        return "translate-x-8 opacity-0";
+        return "translate-x-6 opacity-0";
+      case "zoom":
+        return "scale-95 opacity-0";
       case "none":
-        return "opacity-0 scale-95";
+        return "opacity-0";
       default:
-        return "translate-y-8 opacity-0";
+        return "translate-y-6 opacity-0";
     }
   };
 
@@ -69,9 +84,10 @@ export const ScrollReveal: React.FC<ScrollRevealProps> = ({
     <div
       ref={domRef}
       style={{
-        transitionDuration: "600ms",
+        transitionDuration: `${duration}ms`,
         transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
         transitionDelay: `${delay}ms`,
+        willChange: isVisible ? "auto" : "transform, opacity",
       }}
       className={`transition-all ${getTransformStyle()} ${className}`}
     >

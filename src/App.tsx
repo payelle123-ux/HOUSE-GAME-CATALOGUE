@@ -100,6 +100,7 @@ import { Footer } from "./components/Footer";
 import { BoutiqueLegalSection } from "./components/BoutiqueLegalSection";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { PageLoader } from "./components/PageLoader";
+import { ScrollReveal } from "./components/ScrollReveal";
 
 // Tab Views
 import { HomeTab } from "./components/HomeTab";
@@ -193,6 +194,11 @@ export default function App() {
       window.removeEventListener("hashchange", handleUrlChange);
     };
   }, []);
+
+  // Smooth scroll to top when switching navigation tabs
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activeTab]);
 
   // Core Data States
   const [products, setProducts] = useState<Product[]>(() => loadProducts());
@@ -1255,20 +1261,21 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    shopInfo={shopInfo}
-                    isAdmin={isAdmin}
-                    onSelect={(p) => setSelectedProduct(p)}
-                    onAddToCart={(p) => handleAddToCart(p, 1)}
-                    onEdit={(p) => {
-                      setEditingProduct(p);
-                      setIsProductFormOpen(true);
-                    }}
-                    onDelete={(p) => setProductToDelete(p)}
-                  />
+                {filteredProducts.map((product, idx) => (
+                  <ScrollReveal key={product.id} delay={(idx % 6) * 60} direction="up">
+                    <ProductCard
+                      product={product}
+                      shopInfo={shopInfo}
+                      isAdmin={isAdmin}
+                      onSelect={(p) => setSelectedProduct(p)}
+                      onAddToCart={(p) => handleAddToCart(p, 1)}
+                      onEdit={(p) => {
+                        setEditingProduct(p);
+                        setIsProductFormOpen(true);
+                      }}
+                      onDelete={(p) => setProductToDelete(p)}
+                    />
+                  </ScrollReveal>
                 ))}
               </div>
             )}
@@ -1708,12 +1715,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Floating Scroll To Top with circular progress indicator */}
-      <ScrollToTop />
-
-      {/* Modern Gaming Boot Loader on first session visit */}
-      <PageLoader />
 
       {/* Interactive AI Game Master Companion */}
       <AiGameMaster
