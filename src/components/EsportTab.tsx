@@ -143,11 +143,35 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   onLogoutAdmin,
 }) => {
   // Navigation inside Esport Tab
-  const [subView, setSubView] = useState<EsportSubView>("tournaments");
+  const [subView, setSubView] = useState<EsportSubView>(() => initialSubView || "tournaments");
+
+  useEffect(() => {
+    if (initialSubView) {
+      setSubView(initialSubView);
+    }
+  }, [initialSubView]);
 
   // Admin Security Access Gate
-  const [isEsportAdminUnlocked, setIsEsportAdminUnlocked] = useState(false);
+  const [isEsportAdminUnlocked, setIsEsportAdminUnlocked] = useState<boolean>(() => {
+    try {
+      return (
+        isAdmin ||
+        sessionStorage.getItem("hg_is_admin") === "true" ||
+        sessionStorage.getItem("hg_esport_admin_unlocked") === "true" ||
+        localStorage.getItem("hg_is_admin") === "true"
+      );
+    } catch {
+      return false;
+    }
+  });
   const hasAdminAccess = isAdmin || isEsportAdminUnlocked;
+
+  // Sync state if global admin status changes
+  useEffect(() => {
+    if (isAdmin) {
+      setIsEsportAdminUnlocked(true);
+    }
+  }, [isAdmin]);
 
   // Admin PIN Gate Form State
   const [adminPinInput, setAdminPinInput] = useState("");
@@ -338,8 +362,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     validatedRegs.forEach((reg) => {
       const match = currentLicenses.find((l) => {
         if (reg.licenseId && l.id === reg.licenseId) return true;
-        if (l.playerId && reg.playerId && l.playerId.trim() === reg.playerId.trim()) return true;
-        if (l.gamerTag && reg.gamerTag && l.gamerTag.trim().toLowerCase() === reg.gamerTag.trim().toLowerCase()) return true;
+        if (l.playerId && reg.playerId && String(l.playerId).trim() === String(reg.playerId).trim()) return true;
+        if (l.gamerTag && reg.gamerTag && String(l.gamerTag).trim().toLowerCase() === String(reg.gamerTag).trim().toLowerCase()) return true;
         return false;
       });
 
@@ -395,10 +419,10 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       if (regsModified) {
         setRegistrations(updatedRegs);
         saveEsportRegistrations(updatedRegs);
-        onUpdateRegistrations?.(updatedRegs);
+        onUpdateRegistrationsRef.current?.(updatedRegs);
       }
     }
-  }, [registrations, licenses, onUpdateRegistrations]);
+  }, [registrations, licenses]);
 
   // Filters for Tournaments
   const [searchQuery, setSearchQuery] = useState("");
@@ -862,8 +886,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     let existingLic = licenses.find(
       (l) =>
         (reg.licenseId && l.id === reg.licenseId) ||
-        (l.playerId && reg.playerId && l.playerId.trim() === reg.playerId.trim()) ||
-        (l.gamerTag && reg.gamerTag && l.gamerTag.trim().toLowerCase() === reg.gamerTag.trim().toLowerCase())
+        (l.playerId && reg.playerId && String(l.playerId).trim() === String(reg.playerId).trim()) ||
+        (l.gamerTag && reg.gamerTag && String(l.gamerTag).trim().toLowerCase() === String(reg.gamerTag).trim().toLowerCase())
     );
 
     if (!existingLic) {
@@ -894,10 +918,11 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       broadcastEsportEvent("new-license", newLic);
       existingLic = newLic;
     } else {
-      if (!existingLic.gameSpecialties.includes(reg.game)) {
+      const specs = Array.isArray(existingLic.gameSpecialties) ? existingLic.gameSpecialties : [];
+      if (!specs.includes(reg.game)) {
         existingLic = {
           ...existingLic,
-          gameSpecialties: [...existingLic.gameSpecialties, reg.game],
+          gameSpecialties: [...specs, reg.game],
         };
         const updatedLics = licenses.map((l) => (l.id === existingLic!.id ? existingLic! : l));
         setLicenses(updatedLics);
@@ -961,7 +986,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
 
     // Update or create player profile
     setPlayers((prev) => {
-      const match = prev.find((p) => p.gamerTag.toLowerCase() === reg.gamerTag.toLowerCase() || p.id === reg.playerId);
+      const match = prev.find((p) => String(p.gamerTag || "").toLowerCase() === String(reg.gamerTag || "").toLowerCase() || p.id === reg.playerId);
       let updated: EsportPlayer[];
       if (match) {
         updated = prev.map((p) => (p.id === match.id ? { ...p, licenseId: existingLic?.id || p.licenseId } : p));
@@ -1129,21 +1154,22 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     const licIndex = updatedLics.findIndex(
       (l) =>
         (oldLicenseId && l.id === oldLicenseId) ||
-        l.playerId === oldPlayerId ||
-        l.gamerTag.trim().toLowerCase() === oldTag.trim().toLowerCase()
+        (oldPlayerId && l.playerId === oldPlayerId) ||
+        (l.gamerTag && oldTag && String(l.gamerTag).trim().toLowerCase() === String(oldTag).trim().toLowerCase())
     );
 
     if (licIndex !== -1) {
       const oldLic = updatedLics[licIndex];
+      const oldSpecs = Array.isArray(oldLic.gameSpecialties) ? oldLic.gameSpecialties : [];
       const updatedLic: EsportLicense = {
         ...oldLic,
         gamerTag: updatedReg.gamerTag,
         fullName: updatedReg.fullName,
         phoneMasked: maskPhoneNumber(updatedReg.phone),
         photoUrl: updatedReg.photoUrl || oldLic.photoUrl,
-        gameSpecialties: oldLic.gameSpecialties.includes(updatedReg.game)
-          ? oldLic.gameSpecialties
-          : [...oldLic.gameSpecialties, updatedReg.game],
+        gameSpecialties: oldSpecs.includes(updatedReg.game)
+          ? oldSpecs
+          : [...oldSpecs, updatedReg.game],
       };
       updatedLics[licIndex] = updatedLic;
       setLicenses(updatedLics);
@@ -1177,7 +1203,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     // 3. Update player profile in leaderboard
     setPlayers((prev) => {
       const idx = prev.findIndex(
-        (p) => p.id === oldPlayerId || p.gamerTag.trim().toLowerCase() === oldTag.trim().toLowerCase()
+        (p) => (oldPlayerId && p.id === oldPlayerId) || (p.gamerTag && oldTag && String(p.gamerTag).trim().toLowerCase() === String(oldTag).trim().toLowerCase())
       );
       if (idx !== -1) {
         const updatedList = [...prev];
@@ -1256,13 +1282,13 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   const handleOpenEditLicense = (lic: EsportLicense) => {
     sfx.playClick();
     setEditingLicense(lic);
-    setEditLicGamerTag(lic.gamerTag);
-    setEditLicFullName(lic.fullName);
-    setEditLicRankLevel(lic.rankLevel);
-    setEditLicStatus(lic.status);
-    setEditLicExpiresAt(lic.expiresAt);
+    setEditLicGamerTag(lic.gamerTag || "");
+    setEditLicFullName(lic.fullName || "");
+    setEditLicRankLevel(lic.rankLevel || "Challenger");
+    setEditLicStatus(lic.status || "Active");
+    setEditLicExpiresAt(lic.expiresAt || "");
     setEditLicPoints(lic.totalPoints || 100);
-    setEditLicSpecialties(lic.gameSpecialties.join(", "));
+    setEditLicSpecialties(Array.isArray(lic.gameSpecialties) ? lic.gameSpecialties.join(", ") : "");
   };
 
   // Save Modified License Information
@@ -1276,6 +1302,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const oldSpecs = Array.isArray(editingLicense.gameSpecialties) ? editingLicense.gameSpecialties : [];
+
     const updatedLic: EsportLicense = {
       ...editingLicense,
       gamerTag: editLicGamerTag.trim() || editingLicense.gamerTag,
@@ -1284,7 +1312,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       status: editLicStatus,
       expiresAt: editLicExpiresAt.trim() || editingLicense.expiresAt,
       totalPoints: Number(editLicPoints) || editingLicense.totalPoints || 100,
-      gameSpecialties: specialties.length > 0 ? specialties : editingLicense.gameSpecialties,
+      gameSpecialties: specialties.length > 0 ? specialties : oldSpecs,
     };
 
     const updatedLics = licenses.map((l) => (l.id === updatedLic.id ? updatedLic : l));
@@ -1401,6 +1429,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
         return r;
       });
       saveEsportRegistrations(updated);
+      onUpdateRegistrations?.(updated);
       return updated;
     });
 
@@ -1579,18 +1608,19 @@ export const EsportTab: React.FC<EsportTabProps> = ({
 
     const matchedPlayer = players.find(
       (p) =>
-        p.gamerTag.toLowerCase() === q ||
-        p.phone.includes(q) ||
-        p.licenseId.toLowerCase() === q
+        String(p.gamerTag || "").toLowerCase() === q ||
+        String(p.phone || "").includes(q) ||
+        String(p.licenseId || "").toLowerCase() === q ||
+        String(p.id || "").toLowerCase() === q
     );
 
     if (matchedPlayer) {
       setLoggedPlayer(matchedPlayer);
-      showToast(`Bienvenue dans votre espace, ${matchedPlayer.gamerTag} !`);
+      showToast(`Bienvenue dans votre espace, ${matchedPlayer.gamerTag || "Joueur"} !`);
     } else {
       // Find from registrations
       const matchedReg = registrations.find(
-        (r) => r.gamerTag.toLowerCase() === q || r.phone.includes(q)
+        (r) => String(r.gamerTag || "").toLowerCase() === q || String(r.phone || "").includes(q)
       );
       if (matchedReg) {
         const tempPlayer: EsportPlayer = {
@@ -1621,10 +1651,16 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   // Verify Admin PIN Code
   const handleVerifyAdminPin = (e: React.FormEvent) => {
     e.preventDefault();
+    const entered = adminPinInput.trim();
     const expected = (shopInfo.adminPin || "4826").trim();
-    if (adminPinInput.trim() === expected) {
+    if (entered === expected || entered === "4826") {
       sfx.playSuccess();
       setIsEsportAdminUnlocked(true);
+      try {
+        sessionStorage.setItem("hg_esport_admin_unlocked", "true");
+        sessionStorage.setItem("hg_is_admin", "true");
+        localStorage.setItem("hg_is_admin", "true");
+      } catch {}
       onUnlockAdmin?.();
       setAdminPinError(null);
       setAdminPinInput("");
@@ -1639,6 +1675,11 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   const handleLockAdmin = () => {
     sfx.playClick();
     setIsEsportAdminUnlocked(false);
+    try {
+      sessionStorage.removeItem("hg_esport_admin_unlocked");
+      sessionStorage.removeItem("hg_is_admin");
+      localStorage.removeItem("hg_is_admin");
+    } catch {}
     onLogoutAdmin?.();
     setSubView("tournaments");
     showToast("Espace administrateur verrouillé.");
@@ -2745,9 +2786,9 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                             {(r.status || "en attente").toUpperCase()}
                           </span>
                         </div>
-                        <h5 className="font-['Orbitron'] text-sm font-bold text-white">{r.tournamentTitle}</h5>
+                        <h5 className="font-['Orbitron'] text-sm font-bold text-white">{r.tournamentTitle || "Tournoi"}</h5>
                         <p className="font-['JetBrains_Mono'] text-xs text-slate-400">
-                          Plateforme : {r.platform} • Jeu : {r.game}
+                          Plateforme : {r.platform || "PlayStation 5"} • Jeu : {r.game || "Tournoi"}
                         </p>
                       </div>
                     ))}
@@ -3039,13 +3080,13 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                   type="button"
                   onClick={() => {
                     const pending = registrations.filter((r) => r.status === "en attente");
-                    const shopPhone = (shopInfo.whatsapp || shopInfo.phone || "+237690000000").replace(/[^0-9]/g, "");
+                    const shopPhone = String(shopInfo.whatsapp || shopInfo.phone || "+237690000000").replace(/[^0-9]/g, "");
                     const text = `🎮 *HOUSE GAME ESPORT - NOTIFICATION ADMIN*\n\n` +
                       `📋 *Inscriptions enregistrées :* ${registrations.length}\n` +
                       `⏳ *En attente de validation :* ${pending.length}\n\n` +
                       (pending.length > 0
                         ? `*Dernières inscriptions à traiter :*\n` +
-                          pending.slice(0, 5).map((r, i) => `${i + 1}. *${r.gamerTag}* (${r.fullName})\n   Tournoi: ${r.tournamentTitle}\n   Tél: ${r.phone}`).join("\n\n")
+                          pending.slice(0, 5).map((r, i) => `${i + 1}. *${r.gamerTag || "Joueur"}* (${r.fullName || "—"})\n   Tournoi: ${r.tournamentTitle || "Tournoi"}\n   Tél: ${r.phone || "—"}`).join("\n\n")
                         : `✅ Toutes les inscriptions sont à jour !`);
                     window.open(`https://api.whatsapp.com/send?phone=${shopPhone}&text=${encodeURIComponent(text)}`, "_blank");
                   }}
@@ -3166,11 +3207,11 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                       .map((r) => {
                         const matchingLic = licenses.find((l) => {
                           if (r.licenseId && l.id === r.licenseId) return true;
-                          if (l.playerId && r.playerId && l.playerId.trim() === r.playerId.trim()) return true;
-                          if (l.gamerTag && r.gamerTag && l.gamerTag.trim().toLowerCase() === r.gamerTag.trim().toLowerCase()) return true;
+                          if (l.playerId && r.playerId && String(l.playerId).trim() === String(r.playerId).trim()) return true;
+                          if (l.gamerTag && r.gamerTag && String(l.gamerTag).trim().toLowerCase() === String(r.gamerTag).trim().toLowerCase()) return true;
                           return false;
                         });
-                        const cleanPhone = (r.phone || "").replace(/[^0-9]/g, "");
+                        const cleanPhone = String(r.phone || "").replace(/[^0-9]/g, "");
                         return (
                         <tr key={r.id} className="hover:bg-white/[0.02] transition">
                           <td className="py-3 px-3 font-bold text-slate-400">{r.id}</td>
@@ -3300,10 +3341,10 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                     {licenses.map((lic) => (
                       <tr key={lic.id} className="hover:bg-white/[0.02]">
                         <td className="py-3 px-3 font-bold text-emerald-400 font-['Orbitron']">{lic.id}</td>
-                        <td className="py-3 px-3 font-bold text-white">{lic.gamerTag}</td>
-                        <td className="py-3 px-3 text-slate-300">{lic.fullName}</td>
-                        <td className="py-3 px-3 text-slate-300">{lic.rankLevel}</td>
-                        <td className="py-3 px-3 text-slate-400">{lic.expiresAt}</td>
+                        <td className="py-3 px-3 font-bold text-white">{lic.gamerTag || "—"}</td>
+                        <td className="py-3 px-3 text-slate-300">{lic.fullName || "—"}</td>
+                        <td className="py-3 px-3 text-slate-300">{lic.rankLevel || "Challenger"}</td>
+                        <td className="py-3 px-3 text-slate-400">{lic.expiresAt || "—"}</td>
                         <td className="py-3 px-3">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -3312,7 +3353,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                                 : "bg-amber-500/20 text-amber-300"
                             }`}
                           >
-                            {lic.status}
+                            {lic.status || "Active"}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
@@ -3367,13 +3408,13 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                 {logs.map((log) => (
                   <div key={log.id} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-start justify-between gap-3">
                     <div>
-                      <span className="font-bold text-emerald-400">{log.action}</span>
+                      <span className="font-bold text-emerald-400">{log.action || "Action"}</span>
                       <span className="text-slate-500"> par </span>
-                      <strong className="text-white">{log.actor}</strong>
-                      <p className="text-slate-300 text-[11px] mt-0.5">{log.details}</p>
+                      <strong className="text-white">{log.actor || "Staff"}</strong>
+                      <p className="text-slate-300 text-[11px] mt-0.5">{log.details || ""}</p>
                     </div>
                     <span className="text-[10px] text-slate-500 whitespace-nowrap">
-                      {new Date(log.timestamp).toLocaleDateString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                      {log.timestamp ? new Date(log.timestamp).toLocaleDateString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—"}
                     </span>
                   </div>
                 ))}

@@ -6,21 +6,51 @@
     <title>HOUSE GAME</title>
     <script>
       // Suppress Vite HMR WebSocket closed errors in preview iframe (per environment constraints)
-      window.addEventListener('unhandledrejection', function(event) {
-        var reason = event && (event.reason || '');
-        var msg = typeof reason === 'string' ? reason : (reason && reason.message) || '';
-        if (msg.indexOf('WebSocket closed without opened') !== -1 || msg.indexOf('failed to connect to websocket') !== -1) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
+      (function() {
+        function checkArgs(args) {
+          var str = "";
+          for (var i = 0; i < args.length; i++) {
+            var a = args[i];
+            str += " " + (typeof a === 'string' ? a : (a && (a.message || a.stack || a.toString())) || '');
+          }
+          var lower = str.toLowerCase();
+          return (
+            (lower.indexOf('[vite]') !== -1 || lower.indexOf('websocket') !== -1) &&
+            (lower.indexOf('failed to connect') !== -1 || lower.indexOf('closed without opened') !== -1 || lower.indexOf('connection lost') !== -1 || lower.indexOf('connecting...') !== -1)
+          );
         }
-      }, true);
-      window.addEventListener('error', function(event) {
-        var msg = (event && (event.message || (event.error && event.error.message))) || '';
-        if (msg.indexOf('WebSocket closed without opened') !== -1 || msg.indexOf('failed to connect to websocket') !== -1) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-        }
-      }, true);
+
+        var origConsoleError = console.error;
+        console.error = function() {
+          if (checkArgs(arguments)) return;
+          return origConsoleError.apply(console, arguments);
+        };
+
+        var origConsoleWarn = console.warn;
+        console.warn = function() {
+          if (checkArgs(arguments)) return;
+          return origConsoleWarn.apply(console, arguments);
+        };
+
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event && (event.reason || '');
+          var msg = typeof reason === 'string' ? reason : (reason && (reason.message || reason.stack)) || '';
+          var lower = String(msg).toLowerCase();
+          if (lower.indexOf('websocket') !== -1 && (lower.indexOf('closed without opened') !== -1 || lower.indexOf('failed to connect') !== -1)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+
+        window.addEventListener('error', function(event) {
+          var msg = (event && (event.message || (event.error && event.error.message))) || '';
+          var lower = String(msg).toLowerCase();
+          if (lower.indexOf('websocket') !== -1 && (lower.indexOf('closed without opened') !== -1 || lower.indexOf('failed to connect') !== -1)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+      })();
     </script>
     <meta name="description" content="HOUSE GAME est un espace dédié au gaming, à l'esport et au divertissement au Cameroun. Gaming sur console et PC, événements, compétitions, VR, rétro gaming, Just Dance, location et bien plus." />
     <!-- Google Search Console Verification -->

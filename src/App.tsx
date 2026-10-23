@@ -200,7 +200,10 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>(() => loadCart());
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     try {
-      return sessionStorage.getItem("hg_is_admin") === "true";
+      return (
+        sessionStorage.getItem("hg_is_admin") === "true" ||
+        localStorage.getItem("hg_is_admin") === "true"
+      );
     } catch {
       return false;
     }
@@ -211,9 +214,11 @@ export default function App() {
       if (val) {
         sessionStorage.setItem("hg_is_admin", "true");
         sessionStorage.setItem("hg_esport_admin_unlocked", "true");
+        localStorage.setItem("hg_is_admin", "true");
       } else {
         sessionStorage.removeItem("hg_is_admin");
         sessionStorage.removeItem("hg_esport_admin_unlocked");
+        localStorage.removeItem("hg_is_admin");
       }
     } catch {}
   }, []);
