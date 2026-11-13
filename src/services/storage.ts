@@ -13,6 +13,8 @@ import {
   CampusInfo,
   ActivityItem,
   ActivitiesBannerInfo,
+  VenuePhoto,
+  TeamMember,
 } from "../types";
 import { INITIAL_PRODUCTS } from "../data/initialData";
 import { DEFAULT_INFO } from "../data/logo";
@@ -27,6 +29,8 @@ import {
   INITIAL_CAMPUS_INFO,
   INITIAL_ACTIVITIES,
   DEFAULT_ACTIVITIES_BANNER,
+  INITIAL_VENUE_PHOTOS,
+  INITIAL_TEAM_MEMBERS,
 } from "../data/tabData";
 
 const PRODUCTS_KEY = "hg_products_v3";
@@ -43,6 +47,8 @@ const CAMPUS_MODULES_KEY = "hg_campus_modules_v3";
 const CAMPUS_INFO_KEY = "hg_campus_info_v3";
 const ACTIVITIES_KEY = "hg_activities_v3";
 const ACTIVITIES_BANNER_KEY = "hg_activities_banner_v3";
+const VENUE_PHOTOS_KEY = "hg_venue_photos_v3";
+const TEAM_MEMBERS_KEY = "hg_team_members_v3";
 
 export function loadProducts(): Product[] {
   try {
@@ -196,9 +202,9 @@ export function loadTournaments(): Tournament[] {
       return INITIAL_TOURNAMENTS;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_TOURNAMENTS;
   } catch (err) {
-    return [];
+    return INITIAL_TOURNAMENTS;
   }
 }
 
@@ -248,7 +254,15 @@ export function loadHomeContent(): HomeContent {
     ) {
       parsed.bannerImage = INITIAL_HOME_CONTENT.bannerImage;
     }
-    return { ...INITIAL_HOME_CONTENT, ...parsed };
+    return {
+      ...INITIAL_HOME_CONTENT,
+      ...parsed,
+      partners: Array.isArray(parsed.partners) ? parsed.partners : INITIAL_HOME_CONTENT.partners,
+      socialLinks: {
+        ...(INITIAL_HOME_CONTENT.socialLinks || {}),
+        ...(parsed.socialLinks || {}),
+      },
+    };
   } catch (err) {
     return INITIAL_HOME_CONTENT;
   }
@@ -560,5 +574,48 @@ export function saveActivitiesBanner(banner: ActivitiesBannerInfo): boolean {
     return false;
   }
 }
+
+export function loadVenuePhotos(): VenuePhoto[] {
+  try {
+    const raw = localStorage.getItem(VENUE_PHOTOS_KEY);
+    if (!raw) return INITIAL_VENUE_PHOTOS;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : INITIAL_VENUE_PHOTOS;
+  } catch {
+    return INITIAL_VENUE_PHOTOS;
+  }
+}
+
+export function saveVenuePhotos(photos: VenuePhoto[]): boolean {
+  try {
+    localStorage.setItem(VENUE_PHOTOS_KEY, JSON.stringify(photos));
+    return true;
+  } catch (err) {
+    console.error("Storage saveVenuePhotos error:", err);
+    return false;
+  }
+}
+
+export function loadTeamMembers(): TeamMember[] {
+  try {
+    const raw = localStorage.getItem(TEAM_MEMBERS_KEY);
+    if (!raw) return INITIAL_TEAM_MEMBERS;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : INITIAL_TEAM_MEMBERS;
+  } catch {
+    return INITIAL_TEAM_MEMBERS;
+  }
+}
+
+export function saveTeamMembers(members: TeamMember[]): boolean {
+  try {
+    localStorage.setItem(TEAM_MEMBERS_KEY, JSON.stringify(members));
+    return true;
+  } catch (err) {
+    console.error("Storage saveTeamMembers error:", err);
+    return false;
+  }
+}
+
 
 

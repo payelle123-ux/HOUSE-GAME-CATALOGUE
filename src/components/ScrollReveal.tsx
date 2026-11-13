@@ -27,9 +27,30 @@ export const ScrollReveal: React.FC<ScrollRevealProps> = ({
       return;
     }
 
+    const current = domRef.current;
+
+    const checkVisibleNow = () => {
+      if (!current) return false;
+      const rect = current.getBoundingClientRect();
+      if (rect.top < window.innerHeight + 120 && rect.bottom > -120) {
+        setIsVisible(true);
+        return true;
+      }
+      return false;
+    };
+
+    if (checkVisibleNow()) {
+      return;
+    }
+
+    // Failsafe guarantee: no card can stay stuck invisible in iframes or fast tab switches
+    const failsafeTimer = window.setTimeout(() => {
+      setIsVisible(true);
+    }, Math.min(delay, 300) + 450);
+
     if (!("IntersectionObserver" in window)) {
       setIsVisible(true);
-      return;
+      return () => window.clearTimeout(failsafeTimer);
     }
 
     const observer = new IntersectionObserver(
@@ -37,6 +58,7 @@ export const ScrollReveal: React.FC<ScrollRevealProps> = ({
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             setIsVisible(true);
+            window.clearTimeout(failsafeTimer);
             if (domRef.current) {
               observer.unobserve(domRef.current);
             }
@@ -44,20 +66,25 @@ export const ScrollReveal: React.FC<ScrollRevealProps> = ({
         });
       },
       {
-        threshold,
-        rootMargin: "0px 0px -30px 0px",
+        threshold: Math.min(threshold, 0.01),
+        rootMargin: "120px 0px 120px 0px",
       }
     );
 
-    const current = domRef.current;
     if (current) {
       observer.observe(current);
     }
 
+    const rafId = window.requestAnimationFrame(() => {
+      checkVisibleNow();
+    });
+
     return () => {
+      window.clearTimeout(failsafeTimer);
+      window.cancelAnimationFrame(rafId);
       if (current) observer.unobserve(current);
     };
-  }, [threshold]);
+  }, [threshold, delay]);
 
   const getTransformStyle = () => {
     if (isVisible) return "translate-x-0 translate-y-0 opacity-100 scale-100";

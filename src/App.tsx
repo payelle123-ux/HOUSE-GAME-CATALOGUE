@@ -24,6 +24,8 @@ import {
   ActivitiesBannerInfo,
   HgEventItem,
   EsportRegistration,
+  VenuePhoto,
+  TeamMember,
 } from "./types";
 import {
   loadEsportRegistrations,
@@ -56,6 +58,10 @@ import {
   saveActivities,
   loadActivitiesBanner,
   saveActivitiesBanner,
+  loadVenuePhotos,
+  saveVenuePhotos,
+  loadTeamMembers,
+  saveTeamMembers,
 } from "./services/storage";
 import {
   subscribeToProducts,
@@ -85,6 +91,12 @@ import {
   saveActivitiesBannerCloud,
   subscribeToHgEvents,
   saveHgEventsCloud,
+  subscribeToVenuePhotos,
+  saveVenuePhotoCloud,
+  deleteVenuePhotoCloud,
+  subscribeToTeamMembers,
+  saveTeamMemberCloud,
+  deleteTeamMemberCloud,
 } from "./services/firebaseService";
 
 // UI Components
@@ -104,6 +116,7 @@ import { ScrollReveal } from "./components/ScrollReveal";
 
 // Tab Views
 import { HomeTab } from "./components/HomeTab";
+import { AboutTab } from "./components/AboutTab";
 import { ActivitiesTab } from "./components/ActivitiesTab";
 import { HgEventTab } from "./components/HgEventTab";
 import { CampusTab } from "./components/CampusTab";
@@ -128,6 +141,7 @@ import {
 const ORDERED_CATEGORIES = [
   "Tous",
   "Consoles de jeux",
+  "Vente promo",
   "Accessoires",
   "Jeux vidéo",
   "High-Tech",
@@ -157,13 +171,13 @@ function parseInitialRoute(): { tab: NavTabId; tournamentId: string | null } {
     if (hash) {
       const lower = hash.toLowerCase();
       if (lower.includes("esport")) return { tab: "esport", tournamentId: null };
-      if (lower.includes("boutique")) return { tab: "boutique", tournamentId: null };
-      if (lower.includes("events")) return { tab: "events", tournamentId: null };
+      if (lower.includes("about") || lower.includes("qui-sommes-nous")) return { tab: "about", tournamentId: null };
+      if (lower.includes("boutique") || lower.includes("shop")) return { tab: "shop", tournamentId: null };
+      if (lower.includes("hgevent") || lower.includes("events")) return { tab: "events", tournamentId: null };
       if (lower.includes("campus")) return { tab: "campus", tournamentId: null };
       if (lower.includes("activities")) return { tab: "activities", tournamentId: null };
       if (lower.includes("repair")) return { tab: "repair", tournamentId: null };
-      if (lower.includes("service")) return { tab: "services", tournamentId: null };
-      if (lower.includes("hgevent")) return { tab: "hgevent", tournamentId: null };
+      if (lower.includes("service")) return { tab: "service", tournamentId: null };
     }
   } catch (err) {
     console.warn("Could not parse initial route:", err);
@@ -240,6 +254,8 @@ export default function App() {
   const [tickerItems, setTickerItems] = useState(() => loadTickerItems());
   const [activities, setActivities] = useState<ActivityItem[]>(() => loadActivities());
   const [activitiesBanner, setActivitiesBanner] = useState<ActivitiesBannerInfo>(() => loadActivitiesBanner());
+  const [venuePhotos, setVenuePhotos] = useState<VenuePhoto[]>(() => loadVenuePhotos());
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => loadTeamMembers());
 
   // Esport Data States & Live Inscriptions Alerts
   const [esportRegistrations, setEsportRegistrations] = useState<EsportRegistration[]>(() => loadEsportRegistrations());
@@ -390,6 +406,22 @@ export default function App() {
       (err) => console.warn("HG events sync err:", err)
     );
 
+    const unsubVenuePhotos = subscribeToVenuePhotos(
+      (live) => {
+        setVenuePhotos(live);
+        saveVenuePhotos(live);
+      },
+      (err) => console.warn("Venue photos sync err:", err)
+    );
+
+    const unsubTeamMembers = subscribeToTeamMembers(
+      (live) => {
+        setTeamMembers(live);
+        saveTeamMembers(live);
+      },
+      (err) => console.warn("Team members sync err:", err)
+    );
+
     const unsubEsportRegs = subscribeToEsportRegistrations(
       (liveRegs) => {
         if (!isInitialMountRef.current) {
@@ -401,7 +433,7 @@ export default function App() {
               try {
                 new Notification("🎮 Nouvelle Inscription HOUSE GAME ESPORT !", {
                   body: `${incoming.gamerTag} (${incoming.fullName}) s'est inscrit au tournoi « ${incoming.tournamentTitle} ».`,
-                  icon: "/favicon.ico",
+                  icon: "/assets/aistudio/hg_logo__1__a3208585.png",
                 });
               } catch (e) {
                 console.warn("Notification error:", e);
@@ -498,6 +530,8 @@ export default function App() {
       unsubActivities();
       unsubActivitiesBanner();
       unsubHgEvents();
+      unsubVenuePhotos();
+      unsubTeamMembers();
       unsubEsportRegs();
       if (bc) {
         try { bc.close(); } catch { /* ignore */ }
@@ -646,6 +680,99 @@ export default function App() {
       await saveHomeContentCloud(newContent);
     } catch (err) {
       console.error("Cloud home content save error:", err);
+    }
+  };
+
+  // Venue Photos & Team Members Handlers (Qui sommes-nous)
+  const handleSaveVenuePhoto = async (data: Partial<VenuePhoto> & { id?: string }) => {
+    const existing = data.id ? venuePhotos.find((p) => p.id === data.id) : undefined;
+    const saved: VenuePhoto = existing
+      ? {
+          ...existing,
+          ...data,
+          title: data.title ?? existing.title,
+          imageUrl: data.imageUrl ?? existing.imageUrl,
+        }
+      : {
+          id: "vphoto_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+          title: data.title || "Notre Salle",
+          subtitle: data.subtitle || "",
+          imageUrl: data.imageUrl || "",
+          createdAt: Date.now(),
+        };
+
+    setVenuePhotos((prev) => {
+      const updated = existing
+        ? prev.map((p) => (p.id === saved.id ? saved : p))
+        : [saved, ...prev];
+      saveVenuePhotos(updated);
+      return updated;
+    });
+
+    try {
+      await saveVenuePhotoCloud(saved);
+    } catch (err) {
+      console.error("Cloud venue photo save error:", err);
+    }
+  };
+
+  const handleDeleteVenuePhoto = async (photoId: string) => {
+    setVenuePhotos((prev) => {
+      const updated = prev.filter((p) => p.id !== photoId);
+      saveVenuePhotos(updated);
+      return updated;
+    });
+    try {
+      await deleteVenuePhotoCloud(photoId);
+    } catch (err) {
+      console.error("Cloud venue photo delete error:", err);
+    }
+  };
+
+  const handleSaveTeamMember = async (data: Partial<TeamMember> & { id?: string }) => {
+    const existing = data.id ? teamMembers.find((m) => m.id === data.id) : undefined;
+    const saved: TeamMember = existing
+      ? {
+          ...existing,
+          ...data,
+          name: data.name ?? existing.name,
+          role: data.role ?? existing.role,
+        }
+      : {
+          id: "team_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+          name: data.name || "",
+          role: data.role || "",
+          department: data.department || "",
+          photoUrl: data.photoUrl || "",
+          bio: data.bio || "",
+          createdAt: Date.now(),
+        };
+
+    setTeamMembers((prev) => {
+      const updated = existing
+        ? prev.map((m) => (m.id === saved.id ? saved : m))
+        : [...prev, saved];
+      saveTeamMembers(updated);
+      return updated;
+    });
+
+    try {
+      await saveTeamMemberCloud(saved);
+    } catch (err) {
+      console.error("Cloud team member save error:", err);
+    }
+  };
+
+  const handleDeleteTeamMember = async (memberId: string) => {
+    setTeamMembers((prev) => {
+      const updated = prev.filter((m) => m.id !== memberId);
+      saveTeamMembers(updated);
+      return updated;
+    });
+    try {
+      await deleteTeamMemberCloud(memberId);
+    } catch (err) {
+      console.error("Cloud team member delete error:", err);
     }
   };
 
@@ -1024,10 +1151,10 @@ export default function App() {
         const q = searchQuery.trim().toLowerCase();
         const matchQuery =
           !q ||
-          p.name.toLowerCase().includes(q) ||
-          p.category?.toLowerCase().includes(q) ||
-          p.description?.toLowerCase().includes(q) ||
-          p.badge?.toLowerCase().includes(q);
+          (p.name || "").toLowerCase().includes(q) ||
+          (p.category || "").toLowerCase().includes(q) ||
+          (p.description || "").toLowerCase().includes(q) ||
+          (p.badge || "").toLowerCase().includes(q);
 
         return matchCategory && matchStock && matchQuery;
       })
@@ -1039,7 +1166,7 @@ export default function App() {
           return (Number(b.price) || 0) - (Number(a.price) || 0);
         }
         if (sortBy === "name-asc") {
-          return a.name.localeCompare(b.name);
+          return (a.name || "").localeCompare(b.name || "");
         }
         if (sortBy === "featured") {
           return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
@@ -1108,16 +1235,36 @@ export default function App() {
             isAdmin={isAdmin}
             onOpenEditHome={() => setIsEditHomeOpen(true)}
             onNavigateTab={(tabId) => setActiveTab(tabId)}
+            onSaveHomeContent={handleSaveHomeContent}
             onUpdateBannerImage={async (newUrl) => {
               const updated = { ...homeContent, bannerImage: newUrl };
               setHomeContent(updated);
               saveHomeContent(updated);
               try {
-                await updateBannerImageCloud(newUrl);
+                 await updateBannerImageCloud(newUrl);
               } catch (err) {
                 console.error("Erreur lors de la synchronisation Firestore de la bannière:", err);
                 throw err;
               }
+            }}
+          />
+        )}
+
+        {/* TAB 1.5: QUI SOMMES-NOUS (Page dédiée avec photos de salle et équipe) */}
+        {activeTab === "about" && (
+          <AboutTab
+            homeContent={homeContent}
+            shopInfo={shopInfo}
+            isAdmin={isAdmin}
+            venuePhotos={venuePhotos}
+            teamMembers={teamMembers}
+            onNavigateTab={(tabId) => setActiveTab(tabId)}
+            onSaveVenuePhoto={handleSaveVenuePhoto}
+            onDeleteVenuePhoto={handleDeleteVenuePhoto}
+            onSaveTeamMember={handleSaveTeamMember}
+            onDeleteTeamMember={handleDeleteTeamMember}
+            onUpdateAboutText={async (newAboutText) => {
+              await handleSaveHomeContent({ ...homeContent, aboutText: newAboutText });
             }}
           />
         )}
@@ -1393,6 +1540,7 @@ export default function App() {
       <Footer
         shopInfo={shopInfo}
         isAdmin={isAdmin}
+        socialLinks={homeContent.socialLinks}
         onOpenLogin={() => setIsLoginOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />

@@ -26,8 +26,10 @@ export const DEFAULT_TTLS = {
   ACTIVITIES: 15 * 60 * 1000,     // 15 minutes
   HG_EVENTS: 15 * 60 * 1000,      // 15 minutes
   LICENSES: 10 * 60 * 1000,       // 10 minutes
-  MATCHES: 5 * 60 * 1000,         // 5 minutes
+  RANKINGS: 5 * 60 * 1000,        // 5 minutes
   REGISTRATIONS: 2 * 60 * 1000,   // 2 minutes (when polled, or singleton live)
+  VENUE_PHOTOS: 15 * 60 * 1000,   // 15 minutes
+  TEAM_MEMBERS: 15 * 60 * 1000,   // 15 minutes
 };
 
 interface CacheRecord<T> {
@@ -97,7 +99,11 @@ class FirestoreCacheManager {
   /**
    * Retrieve cached data (memory first, then localStorage fallback)
    */
-  public get<T>(key: string, storageKey?: string): { data: T; isFresh: boolean } | null {
+  public get<T>(
+    key: string,
+    storageKey?: string,
+    ttlMs: number = DEFAULT_TTLS.PRODUCTS
+  ): { data: T; isFresh: boolean } | null {
     const now = Date.now();
     const mem = this.memCache.get(key) as CacheRecord<T> | undefined;
 
@@ -114,19 +120,27 @@ class FirestoreCacheManager {
         if (raw) {
           const parsed = JSON.parse(raw);
           // If stored wrapped with timestamp or raw array/object
-          const data = (parsed && typeof parsed === "object" && "data" in parsed && "timestamp" in parsed)
-            ? (parsed.data as T)
-            : (parsed as T);
-          const timestamp = (parsed && parsed.timestamp) ? Number(parsed.timestamp) : 0;
-          const ttl = DEFAULT_TTLS.PRODUCTS;
-          const isFresh = now - timestamp < ttl;
+          const data =
+            parsed && typeof parsed === "object" && "data" in parsed && "timestamp" in parsed
+              ? (parsed.data as T)
+              : (parsed as T);
+          const timestamp =
+            parsed && typeof parsed === "object" && "timestamp" in parsed && parsed.timestamp
+              ? Number(parsed.timestamp)
+              : 0;
+          const isEmptyArray = Array.isArray(data) && data.length === 0;
+          const isFresh = timestamp > 0 && !isEmptyArray && now - timestamp < ttlMs;
 
-          // Hydrate memory cache
+          // Hydrate memory cache WITHOUT falsely marking un-timestamped localStorage as fresh
           this.memCache.set(key, {
             data,
-            timestamp: timestamp || now,
-            expiresAt: (timestamp || now) + ttl,
+            timestamp,
+            expiresAt: isFresh ? timestamp + ttlMs : 0,
           });
+
+          if (isEmptyArray && timestamp === 0) {
+            return null;
+          }
 
           return { data, isFresh };
         }

@@ -571,7 +571,7 @@ export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
                 : "border-transparent text-[#7C8798] hover:text-white"
             }`}
           >
-            Sauvegarde & Import/Export
+            Sauvegarde & Données
           </button>
         </div>
 

@@ -53,6 +53,9 @@ export const HomeContentModal: React.FC<HomeContentModalProps> = ({
   const [presentationText, setPresentationText] = useState(homeContent.presentationText);
   const [bannerImage, setBannerImage] = useState(homeContent.bannerImage);
   const [stats, setStats] = useState<HomeStat[]>(homeContent.stats || []);
+  const [facebookUrl, setFacebookUrl] = useState(homeContent.socialLinks?.facebook || "");
+  const [instagramUrl, setInstagramUrl] = useState(homeContent.socialLinks?.instagram || "");
+  const [tiktokUrl, setTiktokUrl] = useState(homeContent.socialLinks?.tiktok || "");
 
   useEffect(() => {
     if (isOpen) {
@@ -61,6 +64,9 @@ export const HomeContentModal: React.FC<HomeContentModalProps> = ({
       setPresentationText(homeContent.presentationText);
       setBannerImage(homeContent.bannerImage);
       setStats(homeContent.stats || []);
+      setFacebookUrl(homeContent.socialLinks?.facebook || "");
+      setInstagramUrl(homeContent.socialLinks?.instagram || "");
+      setTiktokUrl(homeContent.socialLinks?.tiktok || "");
     }
   }, [isOpen, homeContent]);
 
@@ -89,6 +95,11 @@ export const HomeContentModal: React.FC<HomeContentModalProps> = ({
       presentationText,
       bannerImage,
       stats,
+      socialLinks: {
+        facebook: facebookUrl.trim(),
+        instagram: instagramUrl.trim(),
+        tiktok: tiktokUrl.trim(),
+      },
     });
     onClose();
   };
@@ -100,7 +111,7 @@ export const HomeContentModal: React.FC<HomeContentModalProps> = ({
           <div className="flex items-center gap-2">
             <Edit3 size={18} className="text-amber-400" />
             <h3 className="font-['Orbitron'] text-base font-bold text-white">
-              MODIFIER LA PAGE D'ACCUEIL & PRÉSENTATION
+              MODIFIER LA PAGE D'ACCUEIL & PLATEFORMES
             </h3>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-[#7C8798] hover:text-white">
@@ -176,14 +187,42 @@ export const HomeContentModal: React.FC<HomeContentModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-[#A0AEC0] mb-1">Texte de Présentation Société :</label>
+            <label className="block text-[#A0AEC0] mb-1">Texte d'accroche :</label>
             <textarea
               value={presentationText}
               onChange={(e) => setPresentationText(e.target.value)}
-              rows={4}
+              rows={3}
               className="w-full rounded-lg border border-white/15 bg-[#141824] px-3 py-2.5 text-white focus:border-amber-400 focus:outline-none"
               required
             />
+          </div>
+
+          {/* Nos Plateformes (Facebook, Instagram, TikTok) */}
+          <div className="space-y-3 border-t border-white/10 pt-4">
+            <label className="block text-white font-bold">Liens Nos Plateformes (Réseaux Sociaux) :</label>
+            <div className="grid grid-cols-1 gap-2.5">
+              <input
+                type="text"
+                value={facebookUrl}
+                onChange={(e) => setFacebookUrl(e.target.value)}
+                placeholder="Lien Facebook (https://www.facebook.com/...)"
+                className="w-full rounded-lg border border-white/15 bg-[#141824] px-3 py-2 text-white focus:border-[#3E9BFF] focus:outline-none"
+              />
+              <input
+                type="text"
+                value={instagramUrl}
+                onChange={(e) => setInstagramUrl(e.target.value)}
+                placeholder="Lien Instagram (https://www.instagram.com/...)"
+                className="w-full rounded-lg border border-white/15 bg-[#141824] px-3 py-2 text-white focus:border-pink-400 focus:outline-none"
+              />
+              <input
+                type="text"
+                value={tiktokUrl}
+                onChange={(e) => setTiktokUrl(e.target.value)}
+                placeholder="Lien TikTok (https://www.tiktok.com/@...)"
+                className="w-full rounded-lg border border-white/15 bg-[#141824] px-3 py-2 text-white focus:border-cyan-400 focus:outline-none"
+              />
+            </div>
           </div>
 
           {/* Stats Editor */}

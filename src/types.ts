@@ -205,28 +205,60 @@ export interface EsportPlayer {
   createdAt: number;
 }
 
-export interface EsportMatch {
+export interface ScoringRule {
+  winPoints: number;
+  lossPoints: number;
+}
+
+export interface RankingResultEvent {
+  id: string;
+  playerId?: string;
+  gamerTag: string;
+  fullName?: string;
+  outcome: "win" | "loss";
+  playerScore?: number;
+  opponentScore?: number;
+  scoreDiff?: number;
+  opponentTag?: string;
+  roundLabel?: string;
+  recordedAt: number;
+}
+
+export interface CompetitionRankingEntry {
+  id: string;
+  playerId?: string;
+  position: number;
+  gamerTag: string;
+  fullName?: string;
+  points?: number;
+  score?: string;
+  scoreDiff?: number;
+  wins?: number;
+  losses?: number;
+  matchesPlayed?: number;
+  statsNote?: string;
+  reward?: string;
+  // Optional legacy baseline when migrating older manual rankings without matchHistory
+  seedWins?: number;
+  seedLosses?: number;
+  seedScoreDiff?: number;
+}
+
+export interface CompetitionRanking {
   id: string;
   tournamentId: string;
-  round: number; // 1 = 16ème, 2 = 8ème, 3 = Quarts, 4 = Demis, 5 = Finale
-  roundName: string;
-  matchNumber: number;
-  player1Id?: string;
-  player1Tag: string;
-  player1Score: number;
-  player2Id?: string;
-  player2Tag: string;
-  player2Score: number;
-  winnerId?: string;
-  winnerTag?: string;
-  status: "À venir" | "En cours" | "Terminé" | "Forfait" | "Reporté";
-  isProvisional?: boolean;
-  tableOrScreen?: string;
-  scheduledTime?: string;
-  referee?: string;
-  nextMatchId?: string;
+  tournamentTitle: string;
+  game: string;
+  gameCategory?: string;
+  date?: string;
+  cashPrizePool?: string;
+  isPublished: boolean;
+  publishedAt?: number;
   updatedAt: number;
   notes?: string;
+  scoringRule?: ScoringRule;
+  matchHistory?: RankingResultEvent[];
+  entries: CompetitionRankingEntry[];
 }
 
 export interface EsportAuditLog {
@@ -270,10 +302,36 @@ export interface HomeStat {
 }
 
 export interface HomePartner {
+  id?: string;
   name: string;
-  category: string;
+  category?: string;
   logo: string;
-  tagline: string;
+  tagline?: string;
+  websiteUrl?: string;
+}
+
+export interface SocialPlatforms {
+  facebook?: string;
+  instagram?: string;
+  tiktok?: string;
+}
+
+export interface VenuePhoto {
+  id: string;
+  title: string;
+  subtitle?: string;
+  imageUrl: string;
+  createdAt: number;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  department?: string;
+  photoUrl?: string;
+  bio?: string;
+  createdAt: number;
 }
 
 export interface HomeContent {
@@ -284,10 +342,12 @@ export interface HomeContent {
   stats: HomeStat[];
   partners?: HomePartner[];
   aboutText?: string;
+  socialLinks?: SocialPlatforms;
 }
 
 export type NavTabId =
   | "home"
+  | "about"
   | "shop"
   | "activities"
   | "events"

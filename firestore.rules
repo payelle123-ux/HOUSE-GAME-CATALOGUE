@@ -85,5 +85,17 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // HOUSE GAME ABOUT: Venue photos gallery
+    match /venue_photos/{photoId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // HOUSE GAME ABOUT: Team members profiles
+    match /team_members/{memberId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }

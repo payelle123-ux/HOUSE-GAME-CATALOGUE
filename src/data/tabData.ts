@@ -9,6 +9,8 @@ import {
   CampusInfo,
   ActivityItem,
   ActivitiesBannerInfo,
+  VenuePhoto,
+  TeamMember,
 } from "../types";
 import { OFFICIAL_BANNER_SRC } from "./logo";
 
@@ -119,7 +121,16 @@ export const INITIAL_HOME_CONTENT: HomeContent = {
       tagline: "Créations exclusives de manettes & coques d'art",
     },
   ],
+  socialLinks: {
+    facebook: "",
+    instagram: "",
+    tiktok: "",
+  },
 };
+
+export const INITIAL_VENUE_PHOTOS: VenuePhoto[] = [];
+
+export const INITIAL_TEAM_MEMBERS: TeamMember[] = [];
 
 export const INITIAL_HG_EVENTS: HgEventItem[] = [
   {

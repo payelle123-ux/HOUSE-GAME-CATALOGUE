@@ -5,6 +5,7 @@ import {
   deleteDoc,
   getDocs,
   getDoc,
+  getDocFromServer,
   writeBatch,
   limit,
   query,
@@ -21,6 +22,8 @@ import {
   ActivityItem,
   ActivitiesBannerInfo,
   HgEventItem,
+  VenuePhoto,
+  TeamMember,
 } from "../types";
 import { INITIAL_PRODUCTS } from "../data/initialData";
 import { DEFAULT_INFO } from "../data/logo";
@@ -58,6 +61,10 @@ import {
   saveActivitiesBanner,
   loadHgEvents,
   saveHgEvents,
+  loadVenuePhotos,
+  saveVenuePhotos,
+  loadTeamMembers,
+  saveTeamMembers,
 } from "./storage";
 
 export enum OperationType {
@@ -128,6 +135,22 @@ const HOME_DOC_ID = "overview";
 const ACTIVITIES_DOC_ID = "activities_list";
 const ACTIVITIES_BANNER_DOC_ID = "activities_banner";
 const HG_EVENTS_DOC_ID = "hg_events_official";
+const VENUE_PHOTOS_COLL = "venue_photos";
+const TEAM_MEMBERS_COLL = "team_members";
+
+// Non-blocking boot connection verification per Firebase SDK best practices
+async function testFirestoreConnection(): Promise<void> {
+  try {
+    await getDocFromServer(doc(db, "test", "connection"));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("the client is offline")) {
+      console.error("Please check your Firebase configuration.");
+    }
+  }
+}
+if (typeof window !== "undefined") {
+  void testFirestoreConnection();
+}
 
 // Active subscribers registry for local cache broadcasts
 const productsSubscribers = new Set<(products: Product[]) => void>();
@@ -140,6 +163,8 @@ const homeSubscribers = new Set<(content: HomeContent) => void>();
 const activitiesSubscribers = new Set<(activities: ActivityItem[]) => void>();
 const bannerSubscribers = new Set<(banner: ActivitiesBannerInfo) => void>();
 const hgEventsSubscribers = new Set<(events: HgEventItem[]) => void>();
+const venuePhotosSubscribers = new Set<(photos: VenuePhoto[]) => void>();
+const teamMembersSubscribers = new Set<(members: TeamMember[]) => void>();
 
 // ==================== PRODUCTS (CACHE-FIRST WITH TTL) ====================
 
@@ -150,8 +175,8 @@ export function subscribeToProducts(
   productsSubscribers.add(onUpdate);
 
   // 1. Deliver cached data immediately (0ms latency, zero layout shift)
-  const cached = firestoreCache.get<Product[]>("products", "hg_products_v3");
-  const initialData = cached?.data || loadProducts();
+  const cached = firestoreCache.get<Product[]>("products", "hg_products_v3", DEFAULT_TTLS.PRODUCTS);
+  const initialData = cached?.data && cached.data.length > 0 ? cached.data : loadProducts();
   onUpdate(initialData);
 
   // 2. If cache is fresh or quota cooldown active, skip network read
@@ -200,7 +225,6 @@ export function subscribeToProducts(
       return products;
     })
     .then((freshProducts) => {
-      if (isCancelled) return;
       firestoreCache.set("products", freshProducts, DEFAULT_TTLS.PRODUCTS, "hg_products_v3");
       saveProducts(freshProducts);
       productsSubscribers.forEach((cb) => {
@@ -209,7 +233,7 @@ export function subscribeToProducts(
     })
     .catch((err) => {
       handleFirestoreError(err, OperationType.LIST, PRODUCTS_COLL);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -334,7 +358,7 @@ export function subscribeToShopInfo(
 ): () => void {
   shopInfoSubscribers.add(onUpdate);
 
-  const cached = firestoreCache.get<ShopInfo>("shop_info", "hg_shopinfo_v3");
+  const cached = firestoreCache.get<ShopInfo>("shop_info", "hg_shopinfo_v3", DEFAULT_TTLS.SHOP_INFO);
   const initial = cached?.data || loadShopInfo();
   onUpdate(initial);
 
@@ -355,7 +379,6 @@ export function subscribeToShopInfo(
       return initial;
     })
     .then((freshInfo) => {
-      if (isCancelled) return;
       firestoreCache.set("shop_info", freshInfo, DEFAULT_TTLS.SHOP_INFO, "hg_shopinfo_v3");
       saveShopInfo(freshInfo);
       shopInfoSubscribers.forEach((cb) => {
@@ -364,7 +387,7 @@ export function subscribeToShopInfo(
     })
     .catch((err) => {
       handleFirestoreError(err, OperationType.GET, `${SETTINGS_COLL}/${STORE_DOC_ID}`);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -396,8 +419,8 @@ export function subscribeToRepairServices(
 ): () => void {
   repairSubscribers.add(onUpdate);
 
-  const cached = firestoreCache.get<RepairService[]>("repairs", "hg_repairs_v3");
-  const initial = cached?.data || loadRepairServices();
+  const cached = firestoreCache.get<RepairService[]>("repairs", "hg_repairs_v3", DEFAULT_TTLS.REPAIR_SERVICES);
+  const initial = cached?.data && cached.data.length > 0 ? cached.data : loadRepairServices();
   onUpdate(initial);
 
   if (cached?.isFresh || firestoreCache.isQuotaCoolingDown()) {
@@ -434,7 +457,6 @@ export function subscribeToRepairServices(
       return list;
     })
     .then((fresh) => {
-      if (isCancelled) return;
       firestoreCache.set("repairs", fresh, DEFAULT_TTLS.REPAIR_SERVICES, "hg_repairs_v3");
       saveRepairServices(fresh);
       repairSubscribers.forEach((cb) => {
@@ -443,7 +465,7 @@ export function subscribeToRepairServices(
     })
     .catch((err) => {
       handleFirestoreError(err, OperationType.LIST, REPAIRS_COLL);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -498,8 +520,8 @@ export function subscribeToEvents(
 ): () => void {
   eventsSubscribers.add(onUpdate);
 
-  const cached = firestoreCache.get<GamingEvent[]>("events", "hg_events_v3");
-  const initial = cached?.data || loadEvents();
+  const cached = firestoreCache.get<GamingEvent[]>("events", "hg_events_v3", DEFAULT_TTLS.EVENTS);
+  const initial = cached?.data && cached.data.length > 0 ? cached.data : loadEvents();
   onUpdate(initial);
 
   if (cached?.isFresh || firestoreCache.isQuotaCoolingDown()) {
@@ -538,7 +560,6 @@ export function subscribeToEvents(
       return list;
     })
     .then((fresh) => {
-      if (isCancelled) return;
       firestoreCache.set("events", fresh, DEFAULT_TTLS.EVENTS, "hg_events_v3");
       saveEvents(fresh);
       eventsSubscribers.forEach((cb) => {
@@ -547,7 +568,7 @@ export function subscribeToEvents(
     })
     .catch((err) => {
       handleFirestoreError(err, OperationType.LIST, EVENTS_COLL);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -603,8 +624,8 @@ export function subscribeToTournaments(
 ): () => void {
   tournamentsSubscribers.add(onUpdate);
 
-  const cached = firestoreCache.get<Tournament[]>("tournaments", "hg_tournaments_v3");
-  const initial = cached?.data || loadTournaments();
+  const cached = firestoreCache.get<Tournament[]>("tournaments", "hg_tournaments_v3", DEFAULT_TTLS.TOURNAMENTS);
+  const initial = cached?.data && cached.data.length > 0 ? cached.data : loadTournaments();
   onUpdate(initial);
 
   if (cached?.isFresh || firestoreCache.isQuotaCoolingDown()) {
@@ -619,7 +640,7 @@ export function subscribeToTournaments(
       const q = query(collection(db, TOURNAMENTS_COLL), limit(50));
       const snap = await getDocs(q);
       if (snap.empty) {
-        return initial.length > 0 ? initial : [];
+        return initial.length > 0 ? initial : INITIAL_TOURNAMENTS;
       }
       const list: Tournament[] = [];
       snap.forEach((docSnap) => {
@@ -639,6 +660,11 @@ export function subscribeToTournaments(
           format: d.format || "1v1",
           rules: Array.isArray(d.rules) ? d.rules : [],
           image: d.image || "",
+          description: d.description || "",
+          gameCategory: d.gameCategory || "",
+          isOfficialLeague: Boolean(d.isOfficialLeague),
+          eligibility: d.eligibility || "",
+          organizer: d.organizer || "House Game Esport",
           status: d.status || "Inscriptions ouvertes",
           createdAt: d.createdAt || Date.now(),
         });
@@ -647,7 +673,6 @@ export function subscribeToTournaments(
       return list;
     })
     .then((fresh) => {
-      if (isCancelled) return;
       firestoreCache.set("tournaments", fresh, DEFAULT_TTLS.TOURNAMENTS, "hg_tournaments_v3");
       saveTournaments(fresh);
       tournamentsSubscribers.forEach((cb) => {
@@ -656,7 +681,7 @@ export function subscribeToTournaments(
     })
     .catch((err) => {
       handleFirestoreError(err, OperationType.LIST, TOURNAMENTS_COLL);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -711,7 +736,7 @@ export function subscribeToCustomTabs(
 ): () => void {
   customTabsSubscribers.add(onUpdate);
 
-  const cached = firestoreCache.get<CustomTab[]>("custom_tabs", "hg_custom_tabs_v3");
+  const cached = firestoreCache.get<CustomTab[]>("custom_tabs", "hg_custom_tabs_v3", DEFAULT_TTLS.CUSTOM_TABS);
   const initial = cached?.data || loadCustomTabs();
   onUpdate(initial);
 
@@ -743,7 +768,6 @@ export function subscribeToCustomTabs(
       return list;
     })
     .then((fresh) => {
-      if (isCancelled) return;
       firestoreCache.set("custom_tabs", fresh, DEFAULT_TTLS.CUSTOM_TABS, "hg_custom_tabs_v3");
       saveCustomTabs(fresh);
       customTabsSubscribers.forEach((cb) => {
@@ -752,7 +776,7 @@ export function subscribeToCustomTabs(
     })
     .catch((err) => {
       handleFirestoreError(err, OperationType.LIST, CUSTOM_TABS_COLL);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -807,7 +831,7 @@ export function subscribeToHomeContent(
 ): () => void {
   homeSubscribers.add(onUpdate);
 
-  const cached = firestoreCache.get<HomeContent>("home_content", "hg_home_content_v3");
+  const cached = firestoreCache.get<HomeContent>("home_content", "hg_home_content_v3", DEFAULT_TTLS.HOME_CONTENT);
   const initial = cached?.data || loadHomeContent();
   onUpdate(initial);
 
@@ -832,12 +856,20 @@ export function subscribeToHomeContent(
         ) {
           banner = INITIAL_HOME_CONTENT.bannerImage;
         }
-        return { ...INITIAL_HOME_CONTENT, ...data, bannerImage: banner };
+        return {
+          ...INITIAL_HOME_CONTENT,
+          ...data,
+          bannerImage: banner,
+          partners: Array.isArray(data.partners) ? data.partners : INITIAL_HOME_CONTENT.partners,
+          socialLinks: {
+            ...(INITIAL_HOME_CONTENT.socialLinks || {}),
+            ...(data.socialLinks || {}),
+          },
+        };
       }
       return initial;
     })
     .then((fresh) => {
-      if (isCancelled) return;
       firestoreCache.set("home_content", fresh, DEFAULT_TTLS.HOME_CONTENT, "hg_home_content_v3");
       saveHomeContent(fresh);
       homeSubscribers.forEach((cb) => {
@@ -846,7 +878,7 @@ export function subscribeToHomeContent(
     })
     .catch((err) => {
       handleFirestoreError(err, OperationType.GET, `${HOME_COLL}/${HOME_DOC_ID}`);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -864,7 +896,8 @@ export async function saveHomeContentCloud(content: HomeContent): Promise<void> 
 
   try {
     const docRef = doc(db, HOME_COLL, HOME_DOC_ID);
-    await setDoc(docRef, { ...content, updatedAt: Date.now() }, { merge: true });
+    const sanitized = JSON.parse(JSON.stringify(content));
+    await setDoc(docRef, { ...sanitized, updatedAt: Date.now() }, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${HOME_COLL}/${HOME_DOC_ID}`);
   }
@@ -896,8 +929,8 @@ export function subscribeToActivities(
 ): () => void {
   activitiesSubscribers.add(onUpdate);
 
-  const cached = firestoreCache.get<ActivityItem[]>("activities", "hg_activities_v3");
-  const initial = cached?.data || loadActivities();
+  const cached = firestoreCache.get<ActivityItem[]>("activities", "hg_activities_v3", DEFAULT_TTLS.ACTIVITIES);
+  const initial = cached?.data && cached.data.length > 0 ? cached.data : loadActivities();
   onUpdate(initial.length > 0 ? initial : INITIAL_ACTIVITIES);
 
   if (cached?.isFresh || firestoreCache.isQuotaCoolingDown()) {
@@ -920,7 +953,6 @@ export function subscribeToActivities(
       return initial.length > 0 ? initial : INITIAL_ACTIVITIES;
     })
     .then((fresh) => {
-      if (isCancelled) return;
       firestoreCache.set("activities", fresh, DEFAULT_TTLS.ACTIVITIES, "hg_activities_v3");
       saveActivities(fresh);
       activitiesSubscribers.forEach((cb) => {
@@ -929,7 +961,7 @@ export function subscribeToActivities(
     })
     .catch((err) => {
       handleFirestoreError(err, OperationType.GET, `${HOME_COLL}/${ACTIVITIES_DOC_ID}`);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -965,7 +997,7 @@ export function subscribeToActivitiesBanner(
 ): () => void {
   bannerSubscribers.add(onUpdate);
 
-  const cached = firestoreCache.get<ActivitiesBannerInfo>("activities_banner", "hg_activities_banner_v3");
+  const cached = firestoreCache.get<ActivitiesBannerInfo>("activities_banner", "hg_activities_banner_v3", DEFAULT_TTLS.ACTIVITIES);
   const initial = cached?.data || loadActivitiesBanner();
   onUpdate(initial?.title ? initial : DEFAULT_ACTIVITIES_BANNER);
 
@@ -989,7 +1021,6 @@ export function subscribeToActivitiesBanner(
       return initial?.title ? initial : DEFAULT_ACTIVITIES_BANNER;
     })
     .then((fresh) => {
-      if (isCancelled) return;
       firestoreCache.set("activities_banner", fresh, DEFAULT_TTLS.ACTIVITIES, "hg_activities_banner_v3");
       saveActivitiesBanner(fresh);
       bannerSubscribers.forEach((cb) => {
@@ -998,7 +1029,7 @@ export function subscribeToActivitiesBanner(
     })
     .catch((err) => {
       handleFirestoreError(err, OperationType.GET, `${HOME_COLL}/${ACTIVITIES_BANNER_DOC_ID}`);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -1030,8 +1061,8 @@ export function subscribeToHgEvents(
 ): () => void {
   hgEventsSubscribers.add(onUpdate);
 
-  const cached = firestoreCache.get<HgEventItem[]>("hg_events", "hg_hgevents_v3");
-  const initial = cached?.data || loadHgEvents();
+  const cached = firestoreCache.get<HgEventItem[]>("hg_events", "hg_hgevents_v3", DEFAULT_TTLS.HG_EVENTS);
+  const initial = cached?.data && cached.data.length > 0 ? cached.data : loadHgEvents();
   onUpdate(Array.isArray(initial) && initial.length > 0 ? initial : INITIAL_HG_EVENTS);
 
   if (cached?.isFresh || firestoreCache.isQuotaCoolingDown()) {
@@ -1066,7 +1097,6 @@ export function subscribeToHgEvents(
       return Array.isArray(initial) && initial.length > 0 ? initial : INITIAL_HG_EVENTS;
     })
     .then((fresh) => {
-      if (isCancelled) return;
       firestoreCache.set("hg_events", fresh, DEFAULT_TTLS.HG_EVENTS, "hg_hgevents_v3");
       saveHgEvents(fresh);
       hgEventsSubscribers.forEach((cb) => {
@@ -1075,7 +1105,7 @@ export function subscribeToHgEvents(
     })
     .catch((err) => {
       console.warn("Firestore HG events notice:", err);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -1104,6 +1134,196 @@ export async function saveHgEventsCloud(events: HgEventItem[]): Promise<void> {
   }
 }
 
+// ==================== VENUE PHOTOS (PHOTOS DE NOTRE SALLE) ====================
+
+export function subscribeToVenuePhotos(
+  onUpdate: (photos: VenuePhoto[]) => void,
+  onError?: (error: unknown) => void
+): () => void {
+  venuePhotosSubscribers.add(onUpdate);
+
+  const cached = firestoreCache.get<VenuePhoto[]>("venue_photos", "hg_venue_photos_v3", DEFAULT_TTLS.VENUE_PHOTOS);
+  const initial = cached?.data || loadVenuePhotos();
+  onUpdate(initial);
+
+  if (cached?.isFresh || firestoreCache.isQuotaCoolingDown()) {
+    return () => {
+      venuePhotosSubscribers.delete(onUpdate);
+    };
+  }
+
+  let isCancelled = false;
+  firestoreCache
+    .dedupe("fetch_venue_photos", async () => {
+      const q = query(collection(db, VENUE_PHOTOS_COLL), limit(100));
+      const snap = await getDocs(q);
+      const list: VenuePhoto[] = [];
+      snap.forEach((docSnap) => {
+        const d = docSnap.data();
+        list.push({
+          id: docSnap.id,
+          title: d.title || "Notre Salle",
+          subtitle: d.subtitle || "",
+          imageUrl: d.imageUrl || "",
+          createdAt: d.createdAt || Date.now(),
+        });
+      });
+      list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      return list;
+    })
+    .then((fresh) => {
+      firestoreCache.set("venue_photos", fresh, DEFAULT_TTLS.VENUE_PHOTOS, "hg_venue_photos_v3");
+      saveVenuePhotos(fresh);
+      venuePhotosSubscribers.forEach((cb) => {
+        try { cb(fresh); } catch { /* ignore */ }
+      });
+    })
+    .catch((err) => {
+      handleFirestoreError(err, OperationType.LIST, VENUE_PHOTOS_COLL);
+      if (!isCancelled && onError) onError(err);
+    });
+
+  return () => {
+    isCancelled = true;
+    venuePhotosSubscribers.delete(onUpdate);
+  };
+}
+
+export async function saveVenuePhotoCloud(photo: VenuePhoto): Promise<void> {
+  const current = loadVenuePhotos();
+  const updated = current.some((p) => p.id === photo.id)
+    ? current.map((p) => (p.id === photo.id ? photo : p))
+    : [photo, ...current];
+
+  firestoreCache.set("venue_photos", updated, DEFAULT_TTLS.VENUE_PHOTOS, "hg_venue_photos_v3");
+  saveVenuePhotos(updated);
+  venuePhotosSubscribers.forEach((cb) => {
+    try { cb(updated); } catch { /* ignore */ }
+  });
+
+  try {
+    const docRef = doc(db, VENUE_PHOTOS_COLL, photo.id);
+    const sanitized = JSON.parse(JSON.stringify(photo));
+    await setDoc(docRef, sanitized, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${VENUE_PHOTOS_COLL}/${photo.id}`);
+  }
+}
+
+export async function deleteVenuePhotoCloud(photoId: string): Promise<void> {
+  const current = loadVenuePhotos();
+  const updated = current.filter((p) => p.id !== photoId);
+
+  firestoreCache.set("venue_photos", updated, DEFAULT_TTLS.VENUE_PHOTOS, "hg_venue_photos_v3");
+  saveVenuePhotos(updated);
+  venuePhotosSubscribers.forEach((cb) => {
+    try { cb(updated); } catch { /* ignore */ }
+  });
+
+  try {
+    const docRef = doc(db, VENUE_PHOTOS_COLL, photoId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${VENUE_PHOTOS_COLL}/${photoId}`);
+  }
+}
+
+// ==================== TEAM MEMBERS (NOTRE ÉQUIPE) ====================
+
+export function subscribeToTeamMembers(
+  onUpdate: (members: TeamMember[]) => void,
+  onError?: (error: unknown) => void
+): () => void {
+  teamMembersSubscribers.add(onUpdate);
+
+  const cached = firestoreCache.get<TeamMember[]>("team_members", "hg_team_members_v3", DEFAULT_TTLS.TEAM_MEMBERS);
+  const initial = cached?.data || loadTeamMembers();
+  onUpdate(initial);
+
+  if (cached?.isFresh || firestoreCache.isQuotaCoolingDown()) {
+    return () => {
+      teamMembersSubscribers.delete(onUpdate);
+    };
+  }
+
+  let isCancelled = false;
+  firestoreCache
+    .dedupe("fetch_team_members", async () => {
+      const q = query(collection(db, TEAM_MEMBERS_COLL), limit(100));
+      const snap = await getDocs(q);
+      const list: TeamMember[] = [];
+      snap.forEach((docSnap) => {
+        const d = docSnap.data();
+        list.push({
+          id: docSnap.id,
+          name: d.name || "",
+          role: d.role || "",
+          department: d.department || "",
+          photoUrl: d.photoUrl || "",
+          bio: d.bio || "",
+          createdAt: d.createdAt || Date.now(),
+        });
+      });
+      list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      return list;
+    })
+    .then((fresh) => {
+      firestoreCache.set("team_members", fresh, DEFAULT_TTLS.TEAM_MEMBERS, "hg_team_members_v3");
+      saveTeamMembers(fresh);
+      teamMembersSubscribers.forEach((cb) => {
+        try { cb(fresh); } catch { /* ignore */ }
+      });
+    })
+    .catch((err) => {
+      handleFirestoreError(err, OperationType.LIST, TEAM_MEMBERS_COLL);
+      if (!isCancelled && onError) onError(err);
+    });
+
+  return () => {
+    isCancelled = true;
+    teamMembersSubscribers.delete(onUpdate);
+  };
+}
+
+export async function saveTeamMemberCloud(member: TeamMember): Promise<void> {
+  const current = loadTeamMembers();
+  const updated = current.some((m) => m.id === member.id)
+    ? current.map((m) => (m.id === member.id ? member : m))
+    : [...current, member];
+
+  firestoreCache.set("team_members", updated, DEFAULT_TTLS.TEAM_MEMBERS, "hg_team_members_v3");
+  saveTeamMembers(updated);
+  teamMembersSubscribers.forEach((cb) => {
+    try { cb(updated); } catch { /* ignore */ }
+  });
+
+  try {
+    const docRef = doc(db, TEAM_MEMBERS_COLL, member.id);
+    const sanitized = JSON.parse(JSON.stringify(member));
+    await setDoc(docRef, sanitized, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${TEAM_MEMBERS_COLL}/${member.id}`);
+  }
+}
+
+export async function deleteTeamMemberCloud(memberId: string): Promise<void> {
+  const current = loadTeamMembers();
+  const updated = current.filter((m) => m.id !== memberId);
+
+  firestoreCache.set("team_members", updated, DEFAULT_TTLS.TEAM_MEMBERS, "hg_team_members_v3");
+  saveTeamMembers(updated);
+  teamMembersSubscribers.forEach((cb) => {
+    try { cb(updated); } catch { /* ignore */ }
+  });
+
+  try {
+    const docRef = doc(db, TEAM_MEMBERS_COLL, memberId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${TEAM_MEMBERS_COLL}/${memberId}`);
+  }
+}
+
 /**
  * Admin manual refresh trigger: Forces a re-fetch of all catalog collections
  */
@@ -1119,5 +1339,7 @@ export async function refreshAllCatalogData(force = true): Promise<void> {
     firestoreCache.invalidate("activities", "hg_activities_v3");
     firestoreCache.invalidate("activities_banner", "hg_activities_banner_v3");
     firestoreCache.invalidate("hg_events", "hg_hgevents_v3");
+    firestoreCache.invalidate("venue_photos", "hg_venue_photos_v3");
+    firestoreCache.invalidate("team_members", "hg_team_members_v3");
   }
 }

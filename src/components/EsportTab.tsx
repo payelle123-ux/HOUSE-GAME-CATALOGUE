@@ -5,7 +5,7 @@ import {
   EsportRegistration,
   EsportLicense,
   EsportPlayer,
-  EsportMatch,
+  CompetitionRanking,
   EsportAuditLog,
   RegistrationStatus,
   LicenseStatus,
@@ -62,7 +62,8 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { EsportDigitalLicenseCard } from "./EsportDigitalLicenseCard";
-import { EsportBracketViewer } from "./EsportBracketViewer";
+import { EsportRankingsPublic } from "./EsportRankingsPublic";
+import { EsportAutoRankingsAdmin } from "./EsportAutoRankingsAdmin";
 import { HouseGameLogo } from "./HouseGameLogo";
 import { ScrollReveal } from "./ScrollReveal";
 import {
@@ -79,11 +80,11 @@ import {
   saveLicenseCloud,
   deleteLicenseCloud,
   subscribeToEsportLicenses,
-  loadEsportMatches,
-  saveEsportMatches,
-  saveMatchCloud,
-  deleteMatchCloud,
-  subscribeToEsportMatches,
+  loadCompetitionRankings,
+  saveCompetitionRankings,
+  saveCompetitionRankingCloud,
+  deleteCompetitionRankingCloud,
+  subscribeToCompetitionRankings,
   loadEsportPlayers,
   saveEsportPlayers,
   loadEsportLogs,
@@ -94,7 +95,6 @@ import {
   generateLicenseNumber,
   generateSvgQrDataUri,
   verifyEsportLicense,
-  generateTournamentMatches,
   exportToCsv,
   maskPhoneNumber,
   EsportBannerConfig,
@@ -125,7 +125,7 @@ interface EsportTabProps {
   onLogoutAdmin?: () => void;
 }
 
-type EsportSubView = "tournaments" | "licenses" | "brackets" | "rankings" | "player-space" | "admin-dash";
+type EsportSubView = "tournaments" | "licenses" | "rankings" | "player-space" | "admin-dash";
 
 export const EsportTab: React.FC<EsportTabProps> = ({
   tournaments: parentTournaments,
@@ -181,9 +181,10 @@ export const EsportTab: React.FC<EsportTabProps> = ({
 
   // Local state for esports module
   const [tournamentsList, setTournamentsList] = useState<Tournament[]>(() => {
-    const loaded = loadEsportTournaments();
-    const clean = loaded.filter((t) => !["tourn-1", "tourn-2", "tourn-3", "tourn-4"].includes(t.id));
-    return clean;
+    if (parentTournaments && parentTournaments.length > 0) {
+      return parentTournaments;
+    }
+    return loadEsportTournaments();
   });
   const [registrations, setRegistrations] = useState<EsportRegistration[]>(() => {
     if (propRegistrations && propRegistrations.length > 0) return propRegistrations;
@@ -213,8 +214,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   const [licenses, setLicenses] = useState<EsportLicense[]>(() => {
     return loadEsportLicenses();
   });
-  const [matches, setMatches] = useState<EsportMatch[]>(() => {
-    return loadEsportMatches();
+  const [competitionRankings, setCompetitionRankings] = useState<CompetitionRanking[]>(() => {
+    return loadCompetitionRankings();
   });
   const [players, setPlayers] = useState<EsportPlayer[]>(() => {
     return loadEsportPlayers();
@@ -258,12 +259,12 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       (err) => console.warn("Licenses sync:", err)
     );
 
-    const unsubMatches = subscribeToEsportMatches(
-      (liveMatches) => {
-        setMatches(liveMatches);
-        saveEsportMatches(liveMatches);
+    const unsubRankings = subscribeToCompetitionRankings(
+      (liveRankings) => {
+        setCompetitionRankings(liveRankings);
+        saveCompetitionRankings(liveRankings);
       },
-      (err) => console.warn("Matches sync:", err)
+      (err) => console.warn("Competition rankings sync:", err)
     );
 
     // Cross-tab and window event listener for instantaneous local sync
@@ -281,6 +282,9 @@ export const EsportTab: React.FC<EsportTabProps> = ({
           if (type === "new-license" || type === "update-license" || type === "delete-license" || type === "update-licenses") {
             setLicenses(loadEsportLicenses());
           }
+          if (type === "update-rankings") {
+            setCompetitionRankings(loadCompetitionRankings());
+          }
         };
       }
     } catch {
@@ -296,6 +300,9 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       if (e.key === "hg_esport_licenses_v3") {
         setLicenses(loadEsportLicenses());
       }
+      if (e.key === "hg_esport_competition_rankings_v3") {
+        setCompetitionRankings(loadCompetitionRankings());
+      }
     };
 
     const handleCustomReg = (e?: Event) => {
@@ -309,6 +316,9 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       if (!type || type === "new-license" || type === "update-license" || type === "delete-license" || type === "update-licenses") {
         setLicenses(loadEsportLicenses());
       }
+      if (type === "update-rankings") {
+        setCompetitionRankings(loadCompetitionRankings());
+      }
     };
 
     window.addEventListener("storage", handleStorage);
@@ -318,7 +328,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     return () => {
       unsubRegs();
       unsubLics();
-      unsubMatches();
+      unsubRankings();
       if (bc) {
         try { bc.close(); } catch { /* ignore */ }
       }
@@ -331,11 +341,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   // Sync when parent tournaments change
   useEffect(() => {
     if (parentTournaments) {
-      const cleanParent = parentTournaments.filter(
-        (t) => !["tourn-1", "tourn-2", "tourn-3", "tourn-4"].includes(t.id)
-      );
       setTournamentsList((prev) => {
-        const merged = cleanParent.map((pt) => {
+        const merged = parentTournaments.map((pt) => {
           const valCount = registrations.filter((r) => r.tournamentId === pt.id && r.status === "validée").length;
           const prevItem = prev.find((p) => p.id === pt.id);
           const computedSlots = Math.max(pt.currentSlots || 0, prevItem?.currentSlots || 0, valCount);
@@ -431,10 +438,19 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   const [statusFilter, setStatusFilter] = useState("Tous");
   const [formatFilter, setFormatFilter] = useState("Tous");
 
-  // Selected tournament for brackets
-  const [selectedBracketTournamentId, setSelectedBracketTournamentId] = useState<string>(
+  // Selected tournament for rankings display & management
+  const [selectedRankingTournamentId, setSelectedRankingTournamentId] = useState<string>(
     tournamentsList[0]?.id || ""
   );
+
+  useEffect(() => {
+    if (
+      tournamentsList.length > 0 &&
+      (!selectedRankingTournamentId || !tournamentsList.some((t) => t.id === selectedRankingTournamentId))
+    ) {
+      setSelectedRankingTournamentId(tournamentsList[0].id);
+    }
+  }, [tournamentsList, selectedRankingTournamentId]);
 
   // Registration Modal State
   const [registeringTournament, setRegisteringTournament] = useState<Tournament | null>(null);
@@ -466,7 +482,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
         showToast("Notifications activées ! Vous serez alerté en direct à chaque inscription.");
         new Notification("🔔 HOUSE GAME ESPORT", {
           body: "Alertes d'inscriptions aux tournois activées avec succès !",
-          icon: "/favicon.ico",
+          icon: "/assets/aistudio/hg_logo__1__a3208585.png",
         });
       } else {
         showToast("Notifications refusées dans votre navigateur.");
@@ -705,21 +721,25 @@ export const EsportTab: React.FC<EsportTabProps> = ({
   // ==================== FILTERED DATA ====================
 
   const filteredTournaments = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     return tournamentsList.filter((t) => {
-      const matchSearch =
-        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.game.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.location.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchGame = gameFilter === "Tous" || t.game.toLowerCase().includes(gameFilter.toLowerCase());
+      const title = (t.title || "").toLowerCase();
+      const game = (t.game || "").toLowerCase();
+      const location = (t.location || "").toLowerCase();
+      const format = t.format || "";
+      const matchSearch = title.includes(q) || game.includes(q) || location.includes(q);
+      const matchGame = gameFilter === "Tous" || game.includes(gameFilter.toLowerCase());
       const matchStatus = statusFilter === "Tous" || t.status === statusFilter;
-      const matchFormat = formatFilter === "Tous" || t.format.includes(formatFilter);
+      const matchFormat = formatFilter === "Tous" || format.includes(formatFilter);
       return matchSearch && matchGame && matchStatus && matchFormat;
     });
   }, [tournamentsList, searchQuery, gameFilter, statusFilter, formatFilter]);
 
   const uniqueGames = useMemo(() => {
     const games = new Set<string>();
-    tournamentsList.forEach((t) => games.add(t.game));
+    tournamentsList.forEach((t) => {
+      if (t.game) games.add(t.game);
+    });
     return ["Tous", ...Array.from(games)];
   }, [tournamentsList]);
 
@@ -838,7 +858,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       try {
         new Notification("🎮 Nouvelle Inscription E-Sport !", {
           body: `${newReg.gamerTag} (${newReg.fullName}) s'est inscrit au tournoi « ${registeringTournament.title} »`,
-          icon: "/favicon.ico",
+          icon: "/assets/aistudio/hg_logo__1__a3208585.png",
         });
       } catch (e) {
         console.warn("Notification error:", e);
@@ -1224,32 +1244,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       return prev;
     });
 
-    // 4. Update any matches with this player tag
-    setMatches((prev) => {
-      const updatedM = prev.map((m) => {
-        let changed = false;
-        let p1Tag = m.player1Tag;
-        let p2Tag = m.player2Tag;
-        if (m.player1Tag === oldTag || m.player1Id === oldPlayerId) {
-          p1Tag = updatedReg.gamerTag;
-          changed = true;
-        }
-        if (m.player2Tag === oldTag || m.player2Id === oldPlayerId) {
-          p2Tag = updatedReg.gamerTag;
-          changed = true;
-        }
-        if (changed) {
-          const mod = { ...m, player1Tag: p1Tag, player2Tag: p2Tag };
-          saveMatchCloud(mod);
-          return mod;
-        }
-        return m;
-      });
-      saveEsportMatches(updatedM);
-      return updatedM;
-    });
-
-    // 5. Recalculate tournament slots
+    // 4. Recalculate tournament slots
     const nextCount = updatedRegs.filter(
       (r) => r.tournamentId === updatedReg.tournamentId && r.status === "validée"
     ).length;
@@ -1353,8 +1348,8 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     saveEsportRegistrations([]);
     setLicenses([]);
     saveEsportLicenses([]);
-    setMatches([]);
-    saveEsportMatches([]);
+    setCompetitionRankings([]);
+    saveCompetitionRankings([]);
     setPlayers([]);
     saveEsportPlayers([]);
     setLogs([]);
@@ -1452,138 +1447,28 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     setLicenseToDelete(null);
   };
 
-  // Bracket Generation
-  const handleGenerateBracket = (tournament: Tournament) => {
-    sfx.playClick();
-    try {
-      const { matches: newMatches, log } = generateTournamentMatches(tournament, registrations, "Staff Esport");
-      const filteredOldMatches = matches.filter((m) => m.tournamentId !== tournament.id);
-      const updatedMatches = [...filteredOldMatches, ...newMatches];
-      setMatches(updatedMatches);
-      saveEsportMatches(updatedMatches);
-
-      newMatches.forEach((m) => saveMatchCloud(m));
-
-      const updatedLogs = [log, ...logs];
-      setLogs(updatedLogs);
-      saveEsportLogs(updatedLogs);
-
-      setSelectedBracketTournamentId(tournament.id);
-      setSubView("brackets");
-      showToast(`Tableau officiel généré avec succès (${newMatches.length} matchs) !`);
-    } catch (err: any) {
-      showToast(err.message || "Erreur lors de la génération du tableau.");
-    }
-  };
-
-  // Delete Tournament Match Tree / Bracket
-  const handleDeleteBracket = async (tournamentId: string) => {
-    sfx.playClick();
-    const tournamentMatches = matches.filter((m) => m.tournamentId === tournamentId);
-    const remainingMatches = matches.filter((m) => m.tournamentId !== tournamentId);
-    setMatches(remainingMatches);
-    saveEsportMatches(remainingMatches);
-
-    // Delete in cloud
-    for (const m of tournamentMatches) {
-      await deleteMatchCloud(m.id);
-    }
-
-    const targetTourn = tournamentsList.find((t) => t.id === tournamentId);
-    const newLog: EsportAuditLog = {
-      id: `log-${Date.now()}`,
-      action: "Suppression de l'arbre des matchs",
-      actor: "Staff Esport HG",
-      targetId: tournamentId,
-      targetType: "tournoi",
-      details: `Suppression de l'arbre de match (${tournamentMatches.length} matchs) pour le tournoi ${targetTourn?.title || tournamentId}. Prêt pour nouveau tirage.`,
-      timestamp: Date.now(),
-    };
-    const updatedLogs = [newLog, ...logs];
-    setLogs(updatedLogs);
-    saveEsportLogs(updatedLogs);
-
-    showToast("Arbre des matchs supprimé avec succès ! Vous pouvez maintenant en générer un nouveau.");
-  };
-
-  // Record Match Score & Advance Winner
-  const handleRecordScore = (
-    matchId: string,
-    s1: number,
-    s2: number,
-    isProvisional: boolean,
-    referee: string
-  ) => {
-    sfx.playSuccess();
-    const targetMatch = matches.find((m) => m.id === matchId);
-    if (!targetMatch) return;
-
-    const isFinished = !isProvisional && (s1 > 0 || s2 > 0) && s1 !== s2;
-    let winnerId: string | undefined;
-    let winnerTag: string | undefined;
-
-    if (isFinished) {
-      if (s1 > s2) {
-        winnerId = targetMatch.player1Id;
-        winnerTag = targetMatch.player1Tag;
-      } else {
-        winnerId = targetMatch.player2Id;
-        winnerTag = targetMatch.player2Tag;
-      }
-    }
-
-    const updatedMatches = matches.map((m) => {
-      if (m.id === matchId) {
-        return {
-          ...m,
-          player1Score: s1,
-          player2Score: s2,
-          isProvisional,
-          status: isFinished ? ("Terminé" as const) : ("En cours" as const),
-          winnerId,
-          winnerTag,
-          referee,
-          updatedAt: Date.now(),
-        };
-      }
-      return m;
+  // Manual Competition Rankings CRUD & Audit Helper
+  const handleSaveCompetitionRanking = async (ranking: CompetitionRanking) => {
+    setCompetitionRankings((prev) => {
+      const next = prev.some((r) => r.tournamentId === ranking.tournamentId)
+        ? prev.map((r) => (r.tournamentId === ranking.tournamentId ? ranking : r))
+        : [ranking, ...prev];
+      return next.sort((a, b) => (b.publishedAt || b.updatedAt) - (a.publishedAt || a.updatedAt));
     });
+    await saveCompetitionRankingCloud(ranking);
+  };
 
-    // If winner determined and targetMatch has nextMatchId, advance winner!
-    if (isFinished && winnerTag && targetMatch.nextMatchId) {
-      const nextMatch = updatedMatches.find((m) => m.id === targetMatch.nextMatchId);
-      if (nextMatch) {
-        if (!nextMatch.player1Tag || nextMatch.player1Tag.includes("Vainqueur") || nextMatch.player1Tag.includes("attente")) {
-          nextMatch.player1Tag = winnerTag;
-          nextMatch.player1Id = winnerId;
-        } else if (!nextMatch.player2Tag || nextMatch.player2Tag.includes("Vainqueur") || nextMatch.player2Tag.includes("attente")) {
-          nextMatch.player2Tag = winnerTag;
-          nextMatch.player2Id = winnerId;
-        }
-      }
-    }
+  const handleDeleteCompetitionRanking = async (tournamentId: string) => {
+    setCompetitionRankings((prev) => prev.filter((r) => r.tournamentId !== tournamentId));
+    await deleteCompetitionRankingCloud(tournamentId);
+  };
 
-    setMatches(updatedMatches);
-    saveEsportMatches(updatedMatches);
-
-    const saved = updatedMatches.find((m) => m.id === matchId);
-    if (saved) saveMatchCloud(saved);
-
-    // Audit log
-    const log: EsportAuditLog = {
-      id: `log-${Date.now()}`,
-      action: "Saisie et validation de score",
-      actor: referee || "Arbitre HG",
-      targetId: matchId,
-      targetType: "match",
-      details: `Score enregistré sur ${matchId} : ${targetMatch.player1Tag} (${s1}) - ${targetMatch.player2Tag} (${s2}). Vainqueur : ${winnerTag || "En cours"}.`,
-      timestamp: Date.now(),
-    };
-    const updatedLogs = [log, ...logs];
-    setLogs(updatedLogs);
-    saveEsportLogs(updatedLogs);
-
-    showToast(isFinished ? `Score validé ! Qualification de ${winnerTag}` : "Score provisoire enregistré.");
+  const handleAppendAuditLog = (newLog: EsportAuditLog) => {
+    setLogs((prev) => {
+      const updated = [newLog, ...prev];
+      saveEsportLogs(updated);
+      return updated;
+    });
   };
 
   // Public License Verification Trigger
@@ -1644,7 +1529,37 @@ export const EsportTab: React.FC<EsportTabProps> = ({
         setLoggedPlayer(tempPlayer);
         showToast(`Profil identifié : ${matchedReg.gamerTag}`);
       } else {
-        showToast("Aucun joueur trouvé avec ce pseudo ou numéro.");
+        // Also search published competition rankings
+        let rankedMatch: { ranking: CompetitionRanking; gamerTag: string; fullName?: string; points?: number } | null = null;
+        for (const r of competitionRankings) {
+          if (!r.isPublished) continue;
+          const entry = r.entries.find((item) => String(item.gamerTag || "").toLowerCase() === q);
+          if (entry) {
+            rankedMatch = { ranking: r, gamerTag: entry.gamerTag, fullName: entry.fullName, points: entry.points };
+            break;
+          }
+        }
+        if (rankedMatch) {
+          setLoggedPlayer({
+            id: `ranked-${q}`,
+            gamerTag: rankedMatch.gamerTag,
+            fullName: rankedMatch.fullName || rankedMatch.gamerTag,
+            phone: "",
+            platform: "PlayStation 5",
+            favoriteGame: rankedMatch.ranking.game || "E-Sport HG",
+            rankTitle: "Challenger",
+            points: rankedMatch.points || 0,
+            matchesPlayed: 1,
+            wins: 0,
+            losses: 0,
+            trophies: 0,
+            licenseId: "",
+            createdAt: Date.now(),
+          });
+          showToast(`Profil identifié : ${rankedMatch.gamerTag}`);
+        } else {
+          showToast("Aucun joueur trouvé avec ce pseudo ou numéro.");
+        }
       }
     }
   };
@@ -1686,8 +1601,10 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     showToast("Espace administrateur verrouillé.");
   };
 
-  const selectedBracketTournament =
-    tournamentsList.find((t) => t.id === selectedBracketTournamentId) || tournamentsList[0];
+  const publishedRankingsCount = useMemo(
+    () => competitionRankings.filter((r) => r.isPublished && r.entries.length > 0).length,
+    [competitionRankings]
+  );
 
   return (
     <div id="esport-tab-root" className="space-y-8 pb-16 animate-fadeIn">
@@ -1717,7 +1634,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
         />
       </div>
 
-      {/* SUB-NAVIGATION BAR (6 Core Views) */}
+      {/* SUB-NAVIGATION BAR (5 Core Views) */}
       <nav
         aria-label="Navigation E-Sport"
         className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-white/10 no-scrollbar"
@@ -1725,8 +1642,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
         {[
           { id: "tournaments", label: "Tournois & Calendrier", icon: Trophy, count: tournamentsList.length },
           { id: "licenses", label: "Licences & Vérification", icon: ShieldCheck, count: licenses.length },
-          { id: "brackets", label: "Tableaux & Scores Live", icon: Swords, count: matches.length },
-          { id: "rankings", label: "Classement & Palmarès", icon: Award, count: players.length },
+          { id: "rankings", label: "Classement & Palmarès", icon: Award, count: publishedRankingsCount },
           { id: "player-space", label: "Espace Joueur", icon: User },
           {
             id: "admin-dash",
@@ -2086,39 +2002,53 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                         </button>
                       </div>
 
-                      {/* Quick Link to Bracket */}
-                      <button
-                        onClick={() => {
-                          setSelectedBracketTournamentId(t.id);
-                          setSubView("brackets");
-                        }}
-                        className="btn-tap w-full flex items-center justify-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/10 py-1.5 text-[11px] font-['JetBrains_Mono'] text-slate-400 hover:text-white transition cursor-pointer"
-                      >
-                        <Swords size={12} className="text-[#3E9BFF]" />
-                        <span>Consulter l'arbre des matchs</span>
-                      </button>
+                      {/* Quick Link to Published Final Ranking */}
+                      {competitionRankings.some(
+                        (r) => r.tournamentId === t.id && r.isPublished && r.entries.length > 0
+                      ) && (
+                        <button
+                          onClick={() => {
+                            sfx.playClick();
+                            setSelectedRankingTournamentId(t.id);
+                            setSubView("rankings");
+                          }}
+                          className="btn-tap w-full flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 py-1.5 text-[11px] font-['JetBrains_Mono'] font-bold text-amber-300 hover:text-white transition cursor-pointer"
+                        >
+                          <Crown size={12} className="text-amber-400" />
+                          <span>Voir le classement final</span>
+                        </button>
+                      )}
 
                       {/* Admin Actions */}
                       {hasAdminAccess && (
                         <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[11px] font-['JetBrains_Mono']">
                           <button
-                            onClick={() => handleGenerateBracket(t)}
-                            className="text-emerald-400 hover:underline flex items-center gap-1"
+                            onClick={() => {
+                              sfx.playClick();
+                              setSelectedRankingTournamentId(t.id);
+                              setSubView("admin-dash");
+                              setTimeout(() => {
+                                document
+                                  .getElementById("esport-auto-rankings-admin")
+                                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                              }, 120);
+                            }}
+                            className="text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
                           >
-                            <Sparkles size={11} />
-                            <span>Générer arbre</span>
+                            <Crown size={11} />
+                            <span>Gérer classement</span>
                           </button>
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => onEditTournament(t)}
-                              className="text-amber-400 hover:underline"
+                              className="text-amber-400 hover:underline cursor-pointer"
                             >
                               Modifier
                             </button>
                             <span className="text-white/20">•</span>
                             <button
                               onClick={() => onDeleteTournament(t)}
-                              className="text-rose-400 hover:underline"
+                              className="text-rose-400 hover:underline cursor-pointer"
                             >
                               Supprimer
                             </button>
@@ -2274,249 +2204,29 @@ export const EsportTab: React.FC<EsportTabProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* VUE 3 : TABLEAU DES MATCHS & SCORES LIVE                                   */}
-      {/* ========================================================================= */}
-      {subView === "brackets" && (
-        <section className="space-y-6 animate-fadeIn">
-          {tournamentsList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-[#0E121B] p-12 text-center space-y-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                <Swords size={32} />
-              </div>
-              <div className="space-y-1">
-                <h4 className="font-['Orbitron'] text-base sm:text-lg font-bold text-white">
-                  Aucun tournoi disponible pour afficher un tableau
-                </h4>
-                <p className="max-w-md font-['Chakra_Petch'] text-xs text-slate-400">
-                  {isAdmin
-                    ? "Créez votre premier tournoi pour pouvoir enregistrer les inscriptions des joueurs et générer l'arbre des matchs officiels."
-                    : "Les arbres de rencontres et les matchs en direct s'afficheront dès qu'un tournoi officiel sera publié."}
-                </p>
-              </div>
-              {isAdmin && (
-                <button
-                  onClick={onOpenAddTournament}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-white shadow-md transition"
-                >
-                  <Plus size={14} />
-                  <span>Nouveau Tournoi</span>
-                </button>
-              )}
-            </div>
-          ) : (
-            <>
-              {/* Tournament Selector for Brackets */}
-              <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl border border-white/10 bg-[#0E121B]">
-                <span className="font-['JetBrains_Mono'] text-xs text-slate-400 font-bold px-2">
-                  Tournoi actif :
-                </span>
-                {tournamentsList.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      sfx.playClick();
-                      setSelectedBracketTournamentId(t.id);
-                    }}
-                    className={`rounded-xl px-3 py-1.5 font-['JetBrains_Mono'] text-xs font-bold transition ${
-                      selectedBracketTournamentId === t.id
-                        ? "bg-emerald-600 text-white shadow-md"
-                        : "bg-white/5 text-slate-300 hover:bg-white/10"
-                    }`}
-                  >
-                    {t.title.split(":")[1]?.trim() || t.title}
-                  </button>
-                ))}
-              </div>
-
-              {/* Bracket Viewer Component */}
-              {selectedBracketTournament && (
-                <div className="rounded-3xl border border-white/10 bg-[#0E121B] p-6 shadow-2xl">
-                  <EsportBracketViewer
-                    tournament={selectedBracketTournament}
-                    matches={matches}
-                    isAdmin={isAdmin}
-                    onRecordScore={handleRecordScore}
-                    onGenerateBracket={() => handleGenerateBracket(selectedBracketTournament)}
-                    onDeleteBracket={() => handleDeleteBracket(selectedBracketTournament.id)}
-                    canGenerate={registrations.filter((r) => r.tournamentId === selectedBracketTournament.id && r.status === "validée").length >= 2}
-                    validatedCount={registrations.filter((r) => r.tournamentId === selectedBracketTournament.id && r.status === "validée").length}
-                  />
-                </div>
-              )}
-            </>
-          )}
-        </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* VUE 4 : CLASSEMENT RANKING & PALMARÈS                                       */}
+      {/* VUE 3 : CLASSEMENTS FINAUX & PALMARÈS OFFICIELS                            */}
       {/* ========================================================================= */}
       {subView === "rankings" && (
-        <section className="space-y-8 animate-fadeIn">
-          {players.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-[#0E121B] p-12 text-center space-y-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
-                <Crown size={32} />
-              </div>
-              <div className="space-y-1">
-                <h4 className="font-['Orbitron'] text-base sm:text-lg font-bold text-white">
-                  Classement général en attente des premiers matchs
-                </h4>
-                <p className="max-w-md font-['Chakra_Petch'] text-xs text-slate-400">
-                  Le classement général des compétiteurs HOUSE GAME et le palmarès des champions se rempliront automatiquement au fur et à mesure que les joueurs disputeront et remporteront leurs matchs de tournoi.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Hall of Fame Podium */}
-              <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-br from-[#1A150D] via-[#0E121B] to-[#07090E] p-6 sm:p-10 shadow-2xl space-y-6">
-                <div className="text-center space-y-2">
-                  <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-3.5 py-1 text-xs font-['JetBrains_Mono'] font-bold text-amber-300">
-                    <Crown size={14} />
-                    <span>PALMARÈS OFFICIEL HOUSE GAME ESPORT</span>
-                  </div>
-                  <h2 className="font-['Orbitron'] text-2xl sm:text-3xl font-black text-white">
-                    LEADERBOARD & MEILLEURS JOUEURS
-                  </h2>
-                  <p className="font-['Chakra_Petch'] text-xs sm:text-sm text-slate-300 max-w-xl mx-auto">
-                    Les points de classement sont attribués lors de chaque tournoi officiel (Victoire : +100 pts, Finale : +60 pts, Demi-finale : +35 pts).
-                  </p>
-                </div>
-
-                {/* Podium 3 Champions */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 max-w-3xl mx-auto items-end">
-                  {/* #2 Silver */}
-                  {players[1] && (
-                    <div className="order-2 md:order-1 rounded-2xl border border-slate-400/30 bg-white/5 p-5 text-center space-y-3">
-                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-300/20 text-slate-200 font-['Orbitron'] text-lg font-black border border-slate-300/40">
-                        2
-                      </div>
-                      <div className="font-['Orbitron'] text-lg font-bold text-white">
-                        {players[1].gamerTag}
-                      </div>
-                      <div className="font-['JetBrains_Mono'] text-xs text-slate-300">
-                        {players[1].points} pts • {players[1].favoriteGame}
-                      </div>
-                      <div className="text-[11px] font-['JetBrains_Mono'] text-slate-400">
-                        {players[1].trophies} Trophée{players[1].trophies > 1 ? "s" : ""}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* #1 Gold Champion */}
-                  {players[0] && (
-                    <div className="order-1 md:order-2 rounded-2xl border-2 border-amber-400/60 bg-gradient-to-t from-amber-500/20 to-amber-500/5 p-6 text-center space-y-3 shadow-[0_0_25px_rgba(245,158,11,0.25)] -translate-y-2">
-                      <Crown size={28} className="text-amber-400 mx-auto animate-bounce" />
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-400 text-slate-950 font-['Orbitron'] text-xl font-black shadow-lg">
-                        1
-                      </div>
-                      <div className="font-['Orbitron'] text-xl font-black text-white">
-                        {players[0].gamerTag}
-                      </div>
-                      <div className="font-['JetBrains_Mono'] text-sm font-bold text-amber-300">
-                        {players[0].points} pts • {players[0].rankTitle}
-                      </div>
-                      <div className="text-xs font-['JetBrains_Mono'] text-slate-300">
-                        {players[0].wins} victoires • {players[0].trophies} Trophée{players[0].trophies > 1 ? "s" : ""}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* #3 Bronze */}
-                  {players[2] && (
-                    <div className="order-3 rounded-2xl border border-amber-700/40 bg-white/5 p-5 text-center space-y-3">
-                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-700/20 text-amber-400 font-['Orbitron'] text-lg font-black border border-amber-700/40">
-                        3
-                      </div>
-                      <div className="font-['Orbitron'] text-lg font-bold text-white">
-                        {players[2].gamerTag}
-                      </div>
-                      <div className="font-['JetBrains_Mono'] text-xs text-slate-300">
-                        {players[2].points} pts • {players[2].favoriteGame}
-                      </div>
-                      <div className="text-[11px] font-['JetBrains_Mono'] text-slate-400">
-                        {players[2].trophies} Trophée{players[2].trophies > 1 ? "s" : ""}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Complete Ranking Table */}
-              <div className="rounded-3xl border border-white/10 bg-[#0E121B] p-6 shadow-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                  <h3 className="font-['Orbitron'] text-base font-bold text-white">
-                    CLASSEMENT GÉNÉRAL DES COMPÉTITEURS ({players.length})
-                  </h3>
-                  <button
-                    onClick={() => exportToCsv(players, "classement-house-game-esport")}
-                    className="flex items-center gap-1.5 text-xs font-['JetBrains_Mono'] text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 rounded-lg transition"
-                  >
-                    <FileSpreadsheet size={13} />
-                    <span>Exporter le classement (CSV)</span>
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left font-['JetBrains_Mono'] text-xs">
-                    <thead>
-                      <tr className="border-b border-white/10 text-slate-400">
-                        <th className="py-3 px-3">RANG</th>
-                        <th className="py-3 px-3">JOUEUR / PSEUDO</th>
-                        <th className="py-3 px-3">TITRE</th>
-                        <th className="py-3 px-3">JEU PRÉFÉRÉ</th>
-                        <th className="py-3 px-3 text-center">MATCHS</th>
-                        <th className="py-3 px-3 text-center">V / D</th>
-                        <th className="py-3 px-3 text-center">WINRATE</th>
-                        <th className="py-3 px-3 text-right">POINTS</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {players.map((p, idx) => {
-                        const winrate =
-                          p.matchesPlayed > 0 ? Math.round((p.wins / p.matchesPlayed) * 100) : 0;
-                        return (
-                          <tr key={p.id} className="hover:bg-white/[0.02] transition">
-                            <td className="py-3 px-3 font-['Orbitron'] font-bold">
-                              {idx === 0 ? "🥇 #1" : idx === 1 ? "🥈 #2" : idx === 2 ? "🥉 #3" : `#${idx + 1}`}
-                            </td>
-                            <td className="py-3 px-3">
-                              <div className="font-['Orbitron'] font-bold text-white">{p.gamerTag}</div>
-                              <div className="text-[10px] text-slate-400">{p.fullName}</div>
-                            </td>
-                            <td className="py-3 px-3">
-                              <span className="px-2 py-0.5 rounded-md bg-white/5 text-slate-300 text-[10px] border border-white/10">
-                                {p.rankTitle}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 text-slate-300">{p.favoriteGame}</td>
-                            <td className="py-3 px-3 text-center text-slate-300">{p.matchesPlayed}</td>
-                            <td className="py-3 px-3 text-center">
-                              <span className="text-emerald-400 font-bold">{p.wins}</span>
-                              <span className="text-slate-500"> / </span>
-                              <span className="text-rose-400">{p.losses}</span>
-                            </td>
-                            <td className="py-3 px-3 text-center font-bold text-emerald-400">
-                              {winrate}%
-                            </td>
-                            <td className="py-3 px-3 text-right font-['Orbitron'] text-sm font-bold text-amber-400">
-                              {p.points}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          )}
-        </section>
+        <EsportRankingsPublic
+          rankings={competitionRankings}
+          tournaments={tournamentsList}
+          selectedTournamentId={selectedRankingTournamentId}
+          onSelectTournamentId={setSelectedRankingTournamentId}
+          hasAdminAccess={hasAdminAccess}
+          onGoToAdminRankings={(tid) => {
+            if (tid) setSelectedRankingTournamentId(tid);
+            setSubView("admin-dash");
+            setTimeout(() => {
+              document
+                .getElementById("esport-auto-rankings-admin")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 120);
+          }}
+        />
       )}
 
       {/* ========================================================================= */}
-      {/* VUE 5 : ESPACE PERSONNEL DU JOUEUR                                         */}
+      {/* VUE 4 : ESPACE PERSONNEL DU JOUEUR                                         */}
       {/* ========================================================================= */}
       {subView === "player-space" && (
         <section className="space-y-6 animate-fadeIn">
@@ -2530,7 +2240,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                   CONNEXION ESPACE JOUEUR
                 </h3>
                 <p className="mt-1 font-['Chakra_Petch'] text-xs text-slate-300">
-                  Retrouvez votre carte de licence numérique, vos inscriptions et vos matchs en direct.
+                  Retrouvez votre carte de licence numérique, vos inscriptions et vos résultats officiels.
                 </p>
               </div>
 
@@ -2644,13 +2354,72 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                     ))}
                 </div>
               </div>
+              {/* Player's Published Competition Rankings */}
+              {(() => {
+                const playerPlacements = competitionRankings
+                  .filter((r) => r.isPublished)
+                  .map((r) => {
+                    const entry = r.entries.find(
+                      (e) =>
+                        e.gamerTag.trim().toLowerCase() ===
+                        (loggedPlayer.gamerTag || "").trim().toLowerCase()
+                    );
+                    return entry ? { ranking: r, entry } : null;
+                  })
+                  .filter(Boolean) as { ranking: CompetitionRanking; entry: CompetitionRanking["entries"][number] }[];
+
+                if (playerPlacements.length === 0) return null;
+                return (
+                  <div className="space-y-3">
+                    <h4 className="font-['Orbitron'] text-base font-bold text-white flex items-center gap-2">
+                      <Crown size={16} className="text-amber-400" />
+                      <span>VOS CLASSEMENTS & PODIUMS OFFICIELS</span>
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {playerPlacements.map(({ ranking, entry }) => (
+                        <div
+                          key={ranking.tournamentId}
+                          className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4 space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-['JetBrains_Mono'] text-[11px] font-bold text-[#3E9BFF]">
+                              {ranking.game}
+                            </span>
+                            <span className="rounded-full border border-amber-400/40 bg-amber-400/20 px-2.5 py-0.5 font-['Orbitron'] text-xs font-black text-amber-300 tabular-nums">
+                              Position #{entry.position}
+                            </span>
+                          </div>
+                          <h5 className="font-['Orbitron'] text-sm font-bold text-white">
+                            {ranking.tournamentTitle}
+                          </h5>
+                          <div className="flex flex-wrap items-center gap-2 font-['JetBrains_Mono'] text-xs text-slate-300">
+                            {entry.points !== undefined && (
+                              <span className="text-amber-300 font-bold">{entry.points} pts</span>
+                            )}
+                            {(entry.wins !== undefined || entry.losses !== undefined) && (
+                              <span className="text-slate-300">
+                                {entry.matchesPlayed ?? ((entry.wins ?? 0) + (entry.losses ?? 0))}M ({entry.wins ?? 0}V / {entry.losses ?? 0}D)
+                              </span>
+                            )}
+                            {entry.reward && (
+                              <span className="rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-emerald-300 font-bold">
+                                {entry.reward}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </section>
       )}
 
       {/* ========================================================================= */}
-      {/* VUE 6 : ESPACE GESTION E-SPORT (ADMIN & STAFF)                             */}
+      {/* VUE 5 : ESPACE GESTION E-SPORT (ADMIN & STAFF)                             */}
       {/* ========================================================================= */}
       {subView === "admin-dash" && (
         !hasAdminAccess ? (
@@ -2668,7 +2437,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                   AUTHENTIFICATION REQUISE
                 </h3>
                 <p className="font-['Chakra_Petch'] text-xs text-slate-300 leading-relaxed">
-                  L'accès à la gestion des inscriptions, licences House Game ID et arbres de tournois est strictement protégé. Veuillez saisir le <strong>code administrateur du site</strong> pour continuer.
+                  L'accès à la gestion des inscriptions, licences House Game ID et classements des compétitions est strictement protégé. Veuillez saisir le <strong>code administrateur du site</strong> pour continuer.
                 </p>
               </div>
 
@@ -2752,7 +2521,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                   GESTION COMPLÈTE DU MODULE HOUSE GAME ESPORT
                 </h2>
                 <p className="font-['Chakra_Petch'] text-xs text-slate-300">
-                  Validez les inscriptions, gérez les licences certifiées, organisez les matchs et exportez vos données.
+                  Validez les inscriptions, gérez les licences certifiées, publiez les classements finaux et exportez vos données.
                 </p>
               </div>
 
@@ -2890,6 +2659,19 @@ export const EsportTab: React.FC<EsportTabProps> = ({
               </div>
             </div>
           )}
+
+          {/* Automated Performance-Based Competition Rankings */}
+          <EsportAutoRankingsAdmin
+            tournaments={tournamentsList}
+            registrations={registrations}
+            rankings={competitionRankings}
+            selectedTournamentId={selectedRankingTournamentId}
+            onSelectTournamentId={setSelectedRankingTournamentId}
+            onSaveRanking={handleSaveCompetitionRanking}
+            onDeleteRanking={handleDeleteCompetitionRanking}
+            onAuditLog={handleAppendAuditLog}
+            onToast={showToast}
+          />
 
           {/* Registrations Management */}
           <div className="rounded-3xl border border-white/10 bg-[#0E121B] p-6 shadow-xl space-y-5">
@@ -3356,8 +3138,10 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center text-center p-2">
-                    <HouseGameLogo size={70} showSlogan={false} className="drop-shadow-md" />
-                    <span className="mt-1 font-['Orbitron'] text-[10px] font-black text-white">
+                    <div className="rounded-xl bg-white/95 p-1.5 shadow-md border border-white/20">
+                      <HouseGameLogo size={70} showSlogan={false} />
+                    </div>
+                    <span className="mt-1.5 font-['Orbitron'] text-[10px] font-black text-white">
                       HOUSE <span className="text-[#FF4438]">GAME</span>
                     </span>
                     <span className="font-['JetBrains_Mono'] text-[9px] text-emerald-400 font-bold">
@@ -3423,9 +3207,9 @@ export const EsportTab: React.FC<EsportTabProps> = ({
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <span className="text-[10px] text-slate-400 block">MATCHS ENREGISTRÉS</span>
+              <span className="text-[10px] text-slate-400 block">CLASSEMENTS PUBLIÉS</span>
               <strong className="font-['Orbitron'] text-base sm:text-lg text-[#3E9BFF]">
-                {matches.length} Rencontre{matches.length > 1 ? "s" : ""}
+                {publishedRankingsCount} Palmarès
               </strong>
             </div>
           </div>
@@ -3951,8 +3735,10 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center text-center">
-                        <HouseGameLogo size={60} showSlogan={false} className="opacity-70" />
-                        <span className="mt-1 font-['JetBrains_Mono'] text-[10px] text-slate-400">
+                        <div className="rounded-xl bg-white/95 p-1.5 shadow-sm border border-white/20">
+                          <HouseGameLogo size={60} showSlogan={false} />
+                        </div>
+                        <span className="mt-1.5 font-['JetBrains_Mono'] text-[10px] text-slate-400">
                           Logo par défaut (House Game)
                         </span>
                       </div>
@@ -4275,7 +4061,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
             </div>
 
             <p className="font-['Chakra_Petch'] text-xs text-slate-300 leading-relaxed">
-              Voulez-vous supprimer tous les tournois, inscriptions, licences, matchs et scores ? Tout le module E-Sport sera réinitialisé à vide.
+              Voulez-vous supprimer tous les tournois, inscriptions, licences et classements ? Tout le module E-Sport sera réinitialisé à vide.
             </p>
 
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -4463,7 +4249,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
               </div>
 
               <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3.5 text-xs font-['JetBrains_Mono'] text-amber-300">
-                <span className="font-bold">Synchronisation automatique :</span> La modification du joueur met à jour instantanément sa licence officielle avec QR code, son profil dans le palmarès et ses matchs dans l'arbre.
+                <span className="font-bold">Synchronisation automatique :</span> La modification du joueur met à jour instantanément sa licence officielle avec QR code et son profil joueur.
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">

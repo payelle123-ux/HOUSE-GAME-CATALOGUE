@@ -47,6 +47,12 @@ export const Navigation: React.FC<NavigationProps> = ({
       color: "text-[#3E9BFF]",
     },
     {
+      id: "about",
+      label: "QUI SOMMES-NOUS",
+      icon: Users,
+      color: "text-[#3E9BFF]",
+    },
+    {
       id: "shop",
       label: "BOUTIQUE",
       icon: ShoppingBag,

@@ -3,7 +3,10 @@ import {
   EsportRegistration,
   EsportLicense,
   EsportPlayer,
-  EsportMatch,
+  CompetitionRanking,
+  CompetitionRankingEntry,
+  ScoringRule,
+  RankingResultEvent,
   EsportAuditLog,
   RegistrationStatus,
   LicenseStatus,
@@ -29,7 +32,7 @@ import {
 const TOURNAMENTS_KEY = "hg_esport_tournaments_v3";
 const REGISTRATIONS_KEY = "hg_esport_registrations_v3";
 const LICENSES_KEY = "hg_esport_licenses_v3";
-const MATCHES_KEY = "hg_esport_matches_v3";
+const COMPETITION_RANKINGS_KEY = "hg_esport_competition_rankings_v3";
 const RANKINGS_KEY = "hg_esport_rankings_v3";
 const LOGS_KEY = "hg_esport_logs_v3";
 
@@ -37,7 +40,7 @@ const LOGS_KEY = "hg_esport_logs_v3";
 const COLL_TOURNAMENTS = "tournaments";
 const COLL_REGISTRATIONS = "registrations";
 const COLL_LICENSES = "player_licenses";
-const COLL_MATCHES = "matches";
+const COLL_RANKINGS = "rankings";
 const COLL_LOGS = "esport_logs";
 
 // Banner & Logo Storage Key
@@ -58,7 +61,7 @@ export const DEFAULT_ESPORT_BANNER_CONFIG: EsportBannerConfig = {
   title: "ARÈNE OFFICIELLE, TOURNOIS & CASH PRIZES GARANTIS",
   subtitle: "HOUSE GAME ESPORT",
   description:
-    "Plateforme officielle de compétition de jeux vidéo au Cameroun. Retrouvez les championnats majeurs sur EA SPORTS FC 27, Tekken 8 et Naruto Storm Connections. Inscrivez-vous, obtenez votre licence numérique certifiée HOUSE GAME ID, suivez les scores en direct et hissez-vous au sommet du classement.",
+    "Plateforme officielle de compétition de jeux vidéo au Cameroun. Retrouvez les championnats majeurs sur EA SPORTS FC 27, Tekken 8 et Naruto Storm Connections. Inscrivez-vous, obtenez votre licence numérique certifiée HOUSE GAME ID, consultez les classements officiels et hissez-vous sur le podium.",
   badgeText: "CIRCUIT OFFICIEL HOUSE GAME ESPORT • CAMEROUN",
 };
 
@@ -150,7 +153,6 @@ export const INITIAL_ESPORT_TOURNAMENTS: Tournament[] = [];
 export const INITIAL_ESPORT_PLAYERS: EsportPlayer[] = [];
 export const INITIAL_ESPORT_LICENSES: EsportLicense[] = [];
 export const INITIAL_ESPORT_REGISTRATIONS: EsportRegistration[] = [];
-export const INITIAL_ESPORT_MATCHES: EsportMatch[] = [];
 export const INITIAL_ESPORT_LOGS: EsportAuditLog[] = [];
 
 // ==================== STORAGE & PERSISTENCE HELPERS ====================
@@ -158,12 +160,20 @@ export const INITIAL_ESPORT_LOGS: EsportAuditLog[] = [];
 export function loadEsportTournaments(): Tournament[] {
   try {
     const raw = localStorage.getItem(TOURNAMENTS_KEY);
-    if (!raw) {
-      saveEsportTournaments([]);
-      return [];
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
     }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const fallbackRaw = localStorage.getItem("hg_tournaments_v3");
+    if (fallbackRaw) {
+      const parsedFallback = JSON.parse(fallbackRaw);
+      if (Array.isArray(parsedFallback) && parsedFallback.length > 0) {
+        return parsedFallback;
+      }
+    }
+    return [];
   } catch {
     return [];
   }
@@ -237,23 +247,485 @@ export function saveEsportLicenses(lics: EsportLicense[]): boolean {
   }
 }
 
-export function loadEsportMatches(): EsportMatch[] {
-  try {
-    const raw = localStorage.getItem(MATCHES_KEY);
-    if (!raw) {
-      saveEsportMatches([]);
-      return [];
+export const DEFAULT_SCORING_RULE: ScoringRule = {
+  winPoints: 3,
+  lossPoints: 0,
+};
+
+export function getNormalizedScoringRule(rule?: Partial<ScoringRule> | null): ScoringRule {
+  const winPts =
+    rule?.winPoints !== undefined && rule?.winPoints !== null && Number.isFinite(Number(rule.winPoints))
+      ? Number(rule.winPoints)
+      : DEFAULT_SCORING_RULE.winPoints;
+  const lossPts =
+    rule?.lossPoints !== undefined && rule?.lossPoints !== null && Number.isFinite(Number(rule.lossPoints))
+      ? Number(rule.lossPoints)
+      : DEFAULT_SCORING_RULE.lossPoints;
+  return { winPoints: winPts, lossPoints: lossPts };
+}
+
+export function normalizeRankingEntries(entries: CompetitionRankingEntry[]): CompetitionRankingEntry[] {
+  const valid = (Array.isArray(entries) ? entries : [])
+    .filter((e) => e && String(e.gamerTag || "").trim().length > 0)
+    .map((e, idx) => ({
+      id: e.id || `entry-${Date.now()}-${idx}`,
+      playerId: e.playerId ? String(e.playerId).trim() : undefined,
+      position: Number.isFinite(Number(e.position)) && Number(e.position) > 0 ? Math.floor(Number(e.position)) : idx + 1,
+      gamerTag: String(e.gamerTag).trim(),
+      fullName: e.fullName ? String(e.fullName).trim() : undefined,
+      points: e.points !== undefined && e.points !== null && String(e.points).trim() !== "" && !isNaN(Number(e.points))
+        ? Number(e.points)
+        : undefined,
+      score: e.score ? String(e.score).trim() : undefined,
+      scoreDiff:
+        e.scoreDiff !== undefined && e.scoreDiff !== null && Number.isFinite(Number(e.scoreDiff))
+          ? Number(e.scoreDiff)
+          : undefined,
+      wins: e.wins !== undefined && e.wins !== null && !isNaN(Number(e.wins)) ? Number(e.wins) : undefined,
+      losses: e.losses !== undefined && e.losses !== null && !isNaN(Number(e.losses)) ? Number(e.losses) : undefined,
+      matchesPlayed: e.matchesPlayed !== undefined && e.matchesPlayed !== null && !isNaN(Number(e.matchesPlayed))
+        ? Number(e.matchesPlayed)
+        : undefined,
+      statsNote: e.statsNote ? String(e.statsNote).trim() : undefined,
+      reward: e.reward ? String(e.reward).trim() : undefined,
+      seedWins:
+        e.seedWins !== undefined && e.seedWins !== null && Number.isFinite(Number(e.seedWins))
+          ? Number(e.seedWins)
+          : undefined,
+      seedLosses:
+        e.seedLosses !== undefined && e.seedLosses !== null && Number.isFinite(Number(e.seedLosses))
+          ? Number(e.seedLosses)
+          : undefined,
+      seedScoreDiff:
+        e.seedScoreDiff !== undefined && e.seedScoreDiff !== null && Number.isFinite(Number(e.seedScoreDiff))
+          ? Number(e.seedScoreDiff)
+          : undefined,
+    }));
+
+  return valid.sort((a, b) => a.position - b.position);
+}
+
+export function normalizeMatchHistory(history?: RankingResultEvent[]): RankingResultEvent[] {
+  if (!Array.isArray(history)) return [];
+  return history
+    .filter((ev) => ev && String(ev.gamerTag || "").trim().length > 0 && (ev.outcome === "win" || ev.outcome === "loss"))
+    .map((ev, idx) => {
+      const hasScores =
+        ev.playerScore !== undefined &&
+        ev.opponentScore !== undefined &&
+        Number.isFinite(Number(ev.playerScore)) &&
+        Number.isFinite(Number(ev.opponentScore));
+      const pScore = hasScores ? Number(ev.playerScore) : undefined;
+      const oScore = hasScores ? Number(ev.opponentScore) : undefined;
+      const diff =
+        hasScores && pScore !== undefined && oScore !== undefined
+          ? pScore - oScore
+          : ev.scoreDiff !== undefined && Number.isFinite(Number(ev.scoreDiff))
+          ? Number(ev.scoreDiff)
+          : undefined;
+      return {
+        id: ev.id || `res-${Date.now()}-${idx}`,
+        playerId: ev.playerId ? String(ev.playerId).trim() : undefined,
+        gamerTag: String(ev.gamerTag).trim(),
+        fullName: ev.fullName ? String(ev.fullName).trim() : undefined,
+        outcome: ev.outcome,
+        playerScore: pScore,
+        opponentScore: oScore,
+        scoreDiff: diff,
+        opponentTag: ev.opponentTag ? String(ev.opponentTag).trim() : undefined,
+        roundLabel: ev.roundLabel ? String(ev.roundLabel).trim() : undefined,
+        recordedAt: Number(ev.recordedAt) || Date.now(),
+      };
+    })
+    .sort((a, b) => b.recordedAt - a.recordedAt);
+}
+
+/**
+ * Recalcule automatiquement les statistiques (Matchs, Victoires, Défaites, Différence, Points)
+ * et réordonne le classement selon :
+ * 1. Total de points (décroissant)
+ * 2. Nombre de victoires (décroissant)
+ * 3. Différence de scores (décroissante)
+ * 4. Nombre de matchs joués (décroissant)
+ */
+export function recomputeCompetitionRanking(
+  ranking: CompetitionRanking,
+  scoringRuleOverride?: ScoringRule
+): CompetitionRanking {
+  const rule = getNormalizedScoringRule(scoringRuleOverride ?? ranking.scoringRule);
+  const hasHistoryArray = Array.isArray(ranking.matchHistory);
+  const history = normalizeMatchHistory(ranking.matchHistory);
+
+  type AggPlayer = CompetitionRankingEntry & {
+    _seedWins: number;
+    _seedLosses: number;
+    _seedScoreDiff: number;
+    _hasHistory: boolean;
+  };
+
+  const playerMap = new Map<string, AggPlayer>();
+  const getKey = (playerId?: string, gamerTag?: string) => {
+    const cleanTag = String(gamerTag || "").trim().toLowerCase();
+    if (cleanTag) return `tag:${cleanTag}`;
+    return `pid:${String(playerId || "").trim().toLowerCase()}`;
+  };
+
+  // Seed from existing entries (deduplicated)
+  normalizeRankingEntries(ranking.entries || []).forEach((e) => {
+    const key = getKey(e.playerId, e.gamerTag);
+    const existing = playerMap.get(key);
+    const seedW =
+      e.seedWins !== undefined
+        ? e.seedWins
+        : !hasHistoryArray
+        ? e.wins ?? 0
+        : 0;
+    const seedL =
+      e.seedLosses !== undefined
+        ? e.seedLosses
+        : !hasHistoryArray
+        ? e.losses ?? 0
+        : 0;
+    const seedDiff =
+      e.seedScoreDiff !== undefined
+        ? e.seedScoreDiff
+        : !hasHistoryArray
+        ? e.scoreDiff ?? 0
+        : 0;
+
+    if (!existing) {
+      playerMap.set(key, {
+        ...e,
+        seedWins: seedW,
+        seedLosses: seedL,
+        seedScoreDiff: seedDiff,
+        _seedWins: seedW,
+        _seedLosses: seedL,
+        _seedScoreDiff: seedDiff,
+        _hasHistory: false,
+      });
+    } else {
+      existing.playerId = existing.playerId || e.playerId;
+      existing.fullName = existing.fullName || e.fullName;
+      existing.reward = existing.reward || e.reward;
+      existing.statsNote = existing.statsNote || e.statsNote;
     }
+  });
+
+  // Accumulate from matchHistory
+  const winCountMap = new Map<string, number>();
+  const lossCountMap = new Map<string, number>();
+  const diffSumMap = new Map<string, number>();
+
+  history.forEach((ev) => {
+    const key = getKey(ev.playerId, ev.gamerTag);
+    if (!playerMap.has(key)) {
+      playerMap.set(key, {
+        id: `entry-${ev.playerId || Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        playerId: ev.playerId,
+        position: playerMap.size + 1,
+        gamerTag: ev.gamerTag,
+        fullName: ev.fullName,
+        wins: 0,
+        losses: 0,
+        matchesPlayed: 0,
+        points: 0,
+        scoreDiff: 0,
+        seedWins: 0,
+        seedLosses: 0,
+        seedScoreDiff: 0,
+        _seedWins: 0,
+        _seedLosses: 0,
+        _seedScoreDiff: 0,
+        _hasHistory: true,
+      });
+    }
+    const p = playerMap.get(key)!;
+    p._hasHistory = true;
+    if (!p.playerId && ev.playerId) p.playerId = ev.playerId;
+    if (!p.fullName && ev.fullName) p.fullName = ev.fullName;
+
+    if (ev.outcome === "win") {
+      winCountMap.set(key, (winCountMap.get(key) || 0) + 1);
+    } else {
+      lossCountMap.set(key, (lossCountMap.get(key) || 0) + 1);
+    }
+    if (ev.scoreDiff !== undefined && Number.isFinite(ev.scoreDiff)) {
+      diffSumMap.set(key, (diffSumMap.get(key) || 0) + Number(ev.scoreDiff));
+    }
+  });
+
+  const computedEntries: CompetitionRankingEntry[] = [];
+  playerMap.forEach((player, key) => {
+    const wins = player._seedWins + (winCountMap.get(key) || 0);
+    const losses = player._seedLosses + (lossCountMap.get(key) || 0);
+    const matchesPlayed = wins + losses;
+    const scoreDiff = player._seedScoreDiff + (diffSumMap.get(key) || 0);
+    const points = wins * rule.winPoints + losses * rule.lossPoints;
+
+    const { _seedWins, _seedLosses, _seedScoreDiff, _hasHistory, ...clean } = player;
+    computedEntries.push({
+      ...clean,
+      wins,
+      losses,
+      matchesPlayed,
+      scoreDiff,
+      points,
+    });
+  });
+
+  // Sort strictly: 1. Points, 2. Wins, 3. ScoreDiff, 4. MatchesPlayed, 5. Name
+  computedEntries.sort((a, b) => {
+    const ptsDiff = (b.points ?? 0) - (a.points ?? 0);
+    if (ptsDiff !== 0) return ptsDiff;
+
+    const winsDiff = (b.wins ?? 0) - (a.wins ?? 0);
+    if (winsDiff !== 0) return winsDiff;
+
+    const sDiff = (b.scoreDiff ?? 0) - (a.scoreDiff ?? 0);
+    if (sDiff !== 0) return sDiff;
+
+    const mDiff = (b.matchesPlayed ?? 0) - (a.matchesPlayed ?? 0);
+    if (mDiff !== 0) return mDiff;
+
+    return a.gamerTag.localeCompare(b.gamerTag, "fr", { sensitivity: "base" });
+  });
+
+  const rankedEntries = computedEntries.map((entry, index) => ({
+    ...entry,
+    position: index + 1,
+  }));
+
+  return {
+    ...ranking,
+    id: ranking.id || ranking.tournamentId,
+    gameCategory: ranking.gameCategory || ranking.game || "E-Sport",
+    scoringRule: rule,
+    matchHistory: history,
+    entries: rankedEntries,
+    updatedAt: Date.now(),
+  };
+}
+
+export function createBaseRankingForTournament(
+  tournament: Tournament,
+  existing?: CompetitionRanking | null
+): CompetitionRanking {
+  if (existing) {
+    return {
+      ...existing,
+      tournamentTitle: tournament.title || existing.tournamentTitle,
+      game: tournament.game || existing.game,
+      gameCategory: tournament.gameCategory || existing.gameCategory || tournament.game,
+      date: tournament.date || existing.date,
+      cashPrizePool: tournament.cashPrize || existing.cashPrizePool,
+      scoringRule: getNormalizedScoringRule(existing.scoringRule),
+      matchHistory: normalizeMatchHistory(existing.matchHistory),
+    };
+  }
+  return {
+    id: tournament.id,
+    tournamentId: tournament.id,
+    tournamentTitle: tournament.title,
+    game: tournament.game,
+    gameCategory: tournament.gameCategory || tournament.game,
+    date: tournament.date,
+    cashPrizePool: tournament.cashPrize,
+    isPublished: true,
+    publishedAt: Date.now(),
+    updatedAt: Date.now(),
+    scoringRule: { ...DEFAULT_SCORING_RULE },
+    matchHistory: [],
+    entries: [],
+  };
+}
+
+export function recordPlayerMatchResult(
+  ranking: CompetitionRanking,
+  input: {
+    playerId?: string;
+    gamerTag: string;
+    fullName?: string;
+    outcome: "win" | "loss";
+    playerScore?: number;
+    opponentScore?: number;
+    opponentTag?: string;
+    roundLabel?: string;
+  }
+): CompetitionRanking {
+  const now = Date.now();
+  const hasScores =
+    input.playerScore !== undefined &&
+    input.opponentScore !== undefined &&
+    Number.isFinite(input.playerScore) &&
+    Number.isFinite(input.opponentScore);
+
+  const newEvent: RankingResultEvent = {
+    id: `res-${now}-${Math.random().toString(36).slice(2, 7)}`,
+    playerId: input.playerId?.trim() || undefined,
+    gamerTag: input.gamerTag.trim(),
+    fullName: input.fullName?.trim() || undefined,
+    outcome: input.outcome,
+    playerScore: hasScores ? Number(input.playerScore) : undefined,
+    opponentScore: hasScores ? Number(input.opponentScore) : undefined,
+    scoreDiff: hasScores ? Number(input.playerScore) - Number(input.opponentScore) : undefined,
+    opponentTag: input.opponentTag?.trim() || undefined,
+    roundLabel: input.roundLabel?.trim() || undefined,
+    recordedAt: now,
+  };
+
+  const baseHistory = normalizeMatchHistory(ranking.matchHistory);
+  const nextRanking: CompetitionRanking = {
+    ...ranking,
+    isPublished: ranking.entries.length === 0 ? true : ranking.isPublished,
+    publishedAt: ranking.publishedAt || now,
+    matchHistory: [newEvent, ...baseHistory],
+  };
+
+  return recomputeCompetitionRanking(nextRanking);
+}
+
+export function updatePlayerMatchResult(
+  ranking: CompetitionRanking,
+  eventId: string,
+  updates: {
+    outcome: "win" | "loss";
+    playerScore?: number;
+    opponentScore?: number;
+    opponentTag?: string;
+    roundLabel?: string;
+  }
+): CompetitionRanking {
+  const baseHistory = normalizeMatchHistory(ranking.matchHistory);
+  const hasScores =
+    updates.playerScore !== undefined &&
+    updates.opponentScore !== undefined &&
+    Number.isFinite(updates.playerScore) &&
+    Number.isFinite(updates.opponentScore);
+
+  const updatedHistory = baseHistory.map((ev) => {
+    if (ev.id !== eventId) return ev;
+    return {
+      ...ev,
+      outcome: updates.outcome,
+      playerScore: hasScores ? Number(updates.playerScore) : undefined,
+      opponentScore: hasScores ? Number(updates.opponentScore) : undefined,
+      scoreDiff: hasScores ? Number(updates.playerScore) - Number(updates.opponentScore) : undefined,
+      opponentTag: updates.opponentTag?.trim() || undefined,
+      roundLabel: updates.roundLabel?.trim() || undefined,
+    };
+  });
+
+  return recomputeCompetitionRanking({
+    ...ranking,
+    matchHistory: updatedHistory,
+  });
+}
+
+export function deletePlayerMatchResult(
+  ranking: CompetitionRanking,
+  eventId: string
+): CompetitionRanking {
+  const baseHistory = normalizeMatchHistory(ranking.matchHistory);
+  const updatedHistory = baseHistory.filter((ev) => ev.id !== eventId);
+
+  return recomputeCompetitionRanking({
+    ...ranking,
+    matchHistory: updatedHistory,
+  });
+}
+
+export function initializeRegisteredPlayersInRanking(
+  ranking: CompetitionRanking,
+  registrations: EsportRegistration[]
+): { ranking: CompetitionRanking; addedCount: number } {
+  const eligible = registrations.filter(
+    (r) => r.tournamentId === ranking.tournamentId && r.status !== "refusée" && r.status !== "annulée"
+  );
+  const existingTags = new Set(ranking.entries.map((e) => e.gamerTag.trim().toLowerCase()));
+  const newEntries: CompetitionRankingEntry[] = [];
+
+  eligible.forEach((reg) => {
+    const tag = (reg.gamerTag || "").trim();
+    if (!tag || existingTags.has(tag.toLowerCase())) return;
+    existingTags.add(tag.toLowerCase());
+    newEntries.push({
+      id: `entry-${reg.playerId || Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      playerId: reg.playerId,
+      position: ranking.entries.length + newEntries.length + 1,
+      gamerTag: tag,
+      fullName: reg.fullName || undefined,
+      wins: 0,
+      losses: 0,
+      matchesPlayed: 0,
+      points: 0,
+      scoreDiff: 0,
+      seedWins: 0,
+      seedLosses: 0,
+      seedScoreDiff: 0,
+    });
+  });
+
+  if (newEntries.length === 0) {
+    return { ranking, addedCount: 0 };
+  }
+
+  const next = recomputeCompetitionRanking({
+    ...ranking,
+    isPublished: true,
+    publishedAt: ranking.publishedAt || Date.now(),
+    matchHistory: normalizeMatchHistory(ranking.matchHistory),
+    entries: [...ranking.entries, ...newEntries],
+  });
+
+  return { ranking: next, addedCount: newEntries.length };
+}
+
+export function removePlayerFromRanking(
+  ranking: CompetitionRanking,
+  gamerTag: string
+): CompetitionRanking {
+  const targetKey = gamerTag.trim().toLowerCase();
+  const nextEntries = (ranking.entries || []).filter(
+    (e) => e.gamerTag.trim().toLowerCase() !== targetKey
+  );
+  const nextHistory = normalizeMatchHistory(ranking.matchHistory).filter(
+    (ev) => ev.gamerTag.trim().toLowerCase() !== targetKey
+  );
+
+  return recomputeCompetitionRanking({
+    ...ranking,
+    entries: nextEntries,
+    matchHistory: nextHistory,
+  });
+}
+
+export function loadCompetitionRankings(): CompetitionRanking[] {
+  try {
+    const raw = localStorage.getItem(COMPETITION_RANKINGS_KEY);
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const list = Array.isArray(parsed) ? parsed : [];
+    return list
+      .filter((r) => r && r.tournamentId)
+      .map((r) => ({
+        ...r,
+        id: r.id || r.tournamentId,
+        gameCategory: r.gameCategory || r.game || "E-Sport",
+        isPublished: Boolean(r.isPublished),
+        updatedAt: Number(r.updatedAt) || Date.now(),
+        scoringRule: getNormalizedScoringRule(r.scoringRule),
+        matchHistory: normalizeMatchHistory(r.matchHistory),
+        entries: normalizeRankingEntries(r.entries || []),
+      }));
   } catch {
     return [];
   }
 }
 
-export function saveEsportMatches(matches: EsportMatch[]): boolean {
+export function saveCompetitionRankings(rankings: CompetitionRanking[]): boolean {
   try {
-    localStorage.setItem(MATCHES_KEY, JSON.stringify(matches));
+    localStorage.setItem(COMPETITION_RANKINGS_KEY, JSON.stringify(rankings));
     return true;
   } catch {
     return false;
@@ -317,7 +789,7 @@ export function clearAllEsportStorage(): void {
     localStorage.setItem(TOURNAMENTS_KEY, JSON.stringify([]));
     localStorage.setItem(REGISTRATIONS_KEY, JSON.stringify([]));
     localStorage.setItem(LICENSES_KEY, JSON.stringify([]));
-    localStorage.setItem(MATCHES_KEY, JSON.stringify([]));
+    localStorage.setItem(COMPETITION_RANKINGS_KEY, JSON.stringify([]));
     localStorage.setItem(RANKINGS_KEY, JSON.stringify([]));
     localStorage.setItem(LOGS_KEY, JSON.stringify([]));
     localStorage.setItem("hg_tournaments", JSON.stringify([]));
@@ -349,10 +821,8 @@ export function broadcastEsportEvent(type: string, payload: unknown): void {
 
 // ==================== FIRESTORE SYNC & SUBSCRIPTIONS ====================
 
-// Singleton multiplexer for registrations: ensures App.tsx and EsportTab.tsx share ONE onSnapshot listener
 const registrationsMultiplexer = new SingletonSubscription<EsportRegistration[]>("registrations");
 const licensesSubscribers = new Set<(lics: EsportLicense[]) => void>();
-const matchesSubscribers = new Set<(matches: EsportMatch[]) => void>();
 
 export function subscribeToEsportRegistrations(
   onUpdate: (regs: EsportRegistration[]) => void,
@@ -458,7 +928,7 @@ export function subscribeToEsportLicenses(
 ): () => void {
   licensesSubscribers.add(onUpdate);
 
-  const cached = firestoreCache.get<EsportLicense[]>("licenses", LICENSES_KEY);
+  const cached = firestoreCache.get<EsportLicense[]>("licenses", LICENSES_KEY, DEFAULT_TTLS.LICENSES);
   const initial = cached?.data || loadEsportLicenses();
   onUpdate(initial);
 
@@ -492,7 +962,6 @@ export function subscribeToEsportLicenses(
       return Array.from(map.values());
     })
     .then((fresh) => {
-      if (isCancelled) return;
       saveEsportLicenses(fresh);
       firestoreCache.set("licenses", fresh, DEFAULT_TTLS.LICENSES, LICENSES_KEY);
       licensesSubscribers.forEach((cb) => {
@@ -502,7 +971,7 @@ export function subscribeToEsportLicenses(
     .catch((err) => {
       firestoreCache.isQuotaError(err);
       console.warn("Licenses fetch notice (using cache):", err);
-      if (onError) onError(err);
+      if (!isCancelled && onError) onError(err);
     });
 
   return () => {
@@ -552,98 +1021,130 @@ export async function deleteLicenseCloud(id: string): Promise<void> {
   }
 }
 
-// ==================== MATCHES (CACHE-FIRST WITH TTL) ====================
+// ==================== COMPETITION RANKINGS (REAL-TIME + FIRESTORE) ====================
 
-export function subscribeToEsportMatches(
-  onUpdate: (matches: EsportMatch[]) => void,
+const rankingsMultiplexer = new SingletonSubscription<CompetitionRanking[]>("competition_rankings");
+
+export function subscribeToCompetitionRankings(
+  onUpdate: (rankings: CompetitionRanking[]) => void,
   onError?: (err: unknown) => void
 ): () => void {
-  matchesSubscribers.add(onUpdate);
+  return rankingsMultiplexer.subscribe(
+    onUpdate,
+    (emit) => {
+      const colRef = collection(db, COLL_RANKINGS);
+      const q = query(colRef, limit(100));
 
-  const cached = firestoreCache.get<EsportMatch[]>("matches", MATCHES_KEY);
-  const initial = cached?.data || loadEsportMatches();
-  onUpdate(initial);
+      return onSnapshot(
+        q,
+        (snapshot) => {
+          try {
+            const cloudItems: CompetitionRanking[] = [];
+            snapshot.forEach((d) => {
+              if (d.id === "global") return;
+              const data = d.data() as Partial<CompetitionRanking>;
+              if (!data || !data.tournamentId || !Array.isArray(data.entries)) return;
+              cloudItems.push({
+                id: data.id || d.id,
+                tournamentId: data.tournamentId,
+                tournamentTitle: data.tournamentTitle || "Compétition",
+                game: data.game || "",
+                gameCategory: data.gameCategory || data.game || "E-Sport",
+                date: data.date,
+                cashPrizePool: data.cashPrizePool,
+                isPublished: Boolean(data.isPublished),
+                publishedAt: data.publishedAt,
+                updatedAt: Number(data.updatedAt) || Date.now(),
+                notes: data.notes,
+                scoringRule: getNormalizedScoringRule(data.scoringRule),
+                matchHistory: normalizeMatchHistory(data.matchHistory),
+                entries: normalizeRankingEntries(data.entries),
+              });
+            });
 
-  if (cached?.isFresh || firestoreCache.isQuotaCoolingDown()) {
-    return () => {
-      matchesSubscribers.delete(onUpdate);
-    };
-  }
+            const localItems = loadCompetitionRankings();
+            const map = new Map<string, CompetitionRanking>();
+            localItems.forEach((r) => map.set(r.tournamentId, r));
+            cloudItems.forEach((r) => {
+              const existing = map.get(r.tournamentId);
+              if (!existing || r.updatedAt >= existing.updatedAt) {
+                map.set(r.tournamentId, r);
+              }
+            });
 
-  let isCancelled = false;
-  firestoreCache
-    .dedupe("fetch_matches", async () => {
-      const colRef = collection(db, COLL_MATCHES);
-      const q = query(colRef, limit(200));
-      const snapshot = await getDocs(q);
+            const merged = Array.from(map.values());
+            merged.sort((a, b) => (b.publishedAt || b.updatedAt) - (a.publishedAt || a.updatedAt));
 
-      if (snapshot.empty) {
-        return initial;
-      }
-
-      const items: EsportMatch[] = [];
-      snapshot.forEach((d) => items.push({ ...(d.data() as EsportMatch), id: d.id }));
-      items.sort((a, b) => (a.round || 1) - (b.round || 1) || (a.matchNumber || 0) - (b.matchNumber || 0));
-      return items;
-    })
-    .then((fresh) => {
-      if (isCancelled) return;
-      saveEsportMatches(fresh);
-      firestoreCache.set("matches", fresh, DEFAULT_TTLS.MATCHES, MATCHES_KEY);
-      matchesSubscribers.forEach((cb) => {
-        try { cb(fresh); } catch { /* ignore */ }
-      });
-    })
-    .catch((err) => {
-      firestoreCache.isQuotaError(err);
-      console.warn("Matches fetch notice (using cache):", err);
-      if (onError) onError(err);
-    });
-
-  return () => {
-    isCancelled = true;
-    matchesSubscribers.delete(onUpdate);
-  };
+            saveCompetitionRankings(merged);
+            firestoreCache.set("competition_rankings", merged, DEFAULT_TTLS.RANKINGS, COMPETITION_RANKINGS_KEY);
+            emit(merged);
+          } catch (err) {
+            console.warn("Error processing rankings snapshot:", err);
+            emit(loadCompetitionRankings());
+            if (onError) onError(err);
+          }
+        },
+        (err) => {
+          firestoreCache.isQuotaError(err);
+          console.warn("Rankings listener notice (using local cache):", err);
+          emit(loadCompetitionRankings());
+          if (onError) onError(err);
+        }
+      );
+    },
+    loadCompetitionRankings()
+  );
 }
 
-export async function saveMatchCloud(match: EsportMatch): Promise<void> {
-  const current = loadEsportMatches();
-  const updated = current.some((m) => m.id === match.id)
-    ? current.map((m) => (m.id === match.id ? match : m))
-    : [...current, match];
+export async function saveCompetitionRankingCloud(ranking: CompetitionRanking): Promise<void> {
+  const normalized: CompetitionRanking = {
+    ...ranking,
+    id: ranking.id || ranking.tournamentId,
+    gameCategory: ranking.gameCategory || ranking.game || "E-Sport",
+    updatedAt: ranking.updatedAt || Date.now(),
+    scoringRule: getNormalizedScoringRule(ranking.scoringRule),
+    matchHistory: normalizeMatchHistory(ranking.matchHistory),
+    entries: normalizeRankingEntries(ranking.entries),
+  };
 
-  saveEsportMatches(updated);
-  firestoreCache.set("matches", updated, DEFAULT_TTLS.MATCHES, MATCHES_KEY);
-  matchesSubscribers.forEach((cb) => {
-    try { cb(updated); } catch { /* ignore */ }
-  });
+  const current = loadCompetitionRankings();
+  const updated = current.some((r) => r.tournamentId === normalized.tournamentId)
+    ? current.map((r) => (r.tournamentId === normalized.tournamentId ? normalized : r))
+    : [normalized, ...current];
+  updated.sort((a, b) => (b.publishedAt || b.updatedAt) - (a.publishedAt || a.updatedAt));
+
+  saveCompetitionRankings(updated);
+  firestoreCache.set("competition_rankings", updated, DEFAULT_TTLS.RANKINGS, COMPETITION_RANKINGS_KEY);
+  rankingsMultiplexer.updateLocally(updated);
+  broadcastEsportEvent("update-rankings", normalized);
 
   try {
-    const docRef = doc(db, COLL_MATCHES, match.id);
-    const sanitized = JSON.parse(JSON.stringify(match));
-    await setDoc(docRef, sanitized, { merge: true });
+    const docId = normalized.tournamentId.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const docRef = doc(db, COLL_RANKINGS, docId);
+    const sanitized = JSON.parse(JSON.stringify(normalized));
+    await setDoc(docRef, sanitized);
   } catch (err) {
     firestoreCache.isQuotaError(err);
-    console.warn("Firestore saveMatchCloud notice (persisted locally):", err);
+    console.warn("Firestore saveCompetitionRankingCloud notice (persisted locally):", err);
   }
 }
 
-export async function deleteMatchCloud(id: string): Promise<void> {
-  const current = loadEsportMatches();
-  const updated = current.filter((m) => m.id !== id);
+export async function deleteCompetitionRankingCloud(tournamentId: string): Promise<void> {
+  const current = loadCompetitionRankings();
+  const updated = current.filter((r) => r.tournamentId !== tournamentId);
 
-  saveEsportMatches(updated);
-  firestoreCache.set("matches", updated, DEFAULT_TTLS.MATCHES, MATCHES_KEY);
-  matchesSubscribers.forEach((cb) => {
-    try { cb(updated); } catch { /* ignore */ }
-  });
+  saveCompetitionRankings(updated);
+  firestoreCache.set("competition_rankings", updated, DEFAULT_TTLS.RANKINGS, COMPETITION_RANKINGS_KEY);
+  rankingsMultiplexer.updateLocally(updated);
+  broadcastEsportEvent("update-rankings", { deletedTournamentId: tournamentId });
 
   try {
-    const docRef = doc(db, COLL_MATCHES, id);
+    const docId = tournamentId.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const docRef = doc(db, COLL_RANKINGS, docId);
     await deleteDoc(docRef);
   } catch (err) {
     firestoreCache.isQuotaError(err);
-    console.warn("Firestore deleteMatchCloud notice:", err);
+    console.warn("Firestore deleteCompetitionRankingCloud notice:", err);
   }
 }
 
@@ -787,150 +1288,216 @@ export function verifyEsportLicense(
 }
 
 /**
- * Automated Bracket Generation Engine
- * Creates a single-elimination tournament bracket from validated registrations
+ * Split a single CSV/TSV line respecting quotes
  */
-export function generateTournamentMatches(
-  tournament: Tournament,
-  registrations: EsportRegistration[],
-  actorName: string
-): { matches: EsportMatch[]; log: EsportAuditLog } {
-  // Filter validated registrations only
-  const validPlayers = registrations.filter(
-    (r) => r.tournamentId === tournament.id && r.status === "validée"
+function splitDelimitedLine(line: string, delimiter: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === delimiter && !inQuotes) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+/**
+ * Parse a spreadsheet (CSV, TSV, Excel/Google Sheets copy-paste) into CompetitionRankingEntry[]
+ */
+export function parseRankingSheetText(rawText: string): {
+  entries: CompetitionRankingEntry[];
+  warnings: string[];
+} {
+  const cleaned = String(rawText || "")
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+  const lines = cleaned
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  if (lines.length === 0) {
+    return { entries: [], warnings: ["Aucune ligne détectée dans la feuille."] };
+  }
+
+  // Detect delimiter: tab > semicolon > comma
+  const sample = lines.slice(0, 5).join("\n");
+  const tabCount = (sample.match(/\t/g) || []).length;
+  const semiCount = (sample.match(/;/g) || []).length;
+  const commaCount = (sample.match(/,/g) || []).length;
+  const delimiter = tabCount >= semiCount && tabCount >= commaCount && tabCount > 0
+    ? "\t"
+    : semiCount >= commaCount && semiCount > 0
+    ? ";"
+    : commaCount > 0
+    ? ","
+    : "\t";
+
+  const rows = lines.map((line) => splitDelimitedLine(line, delimiter));
+  const warnings: string[] = [];
+
+  const normHeader = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+  const firstRow = rows[0].map(normHeader);
+  const headerKeywords = [
+    "position", "pos", "rang", "rank", "classement", "#", "place",
+    "pseudo", "gamertag", "joueur", "player", "nom", "competiteur",
+    "point", "pts", "score", "resultat", "stat", "victoire", "win",
+    "defaite", "loss", "recompense", "prize", "cash", "lot", "gain",
+  ];
+  const looksLikeHeader = firstRow.some((cell) =>
+    headerKeywords.some((kw) => cell === kw || cell.includes(kw))
   );
 
-  if (validPlayers.length < 2) {
-    throw new Error(
-      "Impossible de générer le tableau : au moins 2 inscriptions validées sont requises."
-    );
+  type ColRole = "position" | "gamerTag" | "fullName" | "points" | "score" | "wins" | "losses" | "statsNote" | "reward";
+  const colMap = new Map<number, ColRole>();
+
+  let dataRows = rows;
+  if (looksLikeHeader) {
+    firstRow.forEach((h, idx) => {
+      if (!h) return;
+      if (/^(#|pos|position|rang|rank|place|classement)/.test(h)) colMap.set(idx, "position");
+      else if (h.includes("nom complet") || h.includes("prenom") || h === "fullname" || h === "full name") colMap.set(idx, "fullName");
+      else if (h.includes("pseudo") || h.includes("gamer") || h.includes("joueur") || h.includes("player") || h.includes("tag") || h === "nom") colMap.set(idx, "gamerTag");
+      else if (h.includes("point") || h === "pts") colMap.set(idx, "points");
+      else if (h.includes("score") || h.includes("resultat")) colMap.set(idx, "score");
+      else if (h.includes("victoire") || h === "v" || h === "wins" || h === "win") colMap.set(idx, "wins");
+      else if (h.includes("defaite") || h === "d" || h === "losses" || h === "loss") colMap.set(idx, "losses");
+      else if (h.includes("stat") || h.includes("note") || h.includes("ratio") || h.includes("detail")) colMap.set(idx, "statsNote");
+      else if (h.includes("recompense") || h.includes("cash") || h.includes("prize") || h.includes("lot") || h.includes("gain")) colMap.set(idx, "reward");
+    });
+    dataRows = rows.slice(1);
   }
 
-  // Shuffle for fair random draw
-  const shuffled = [...validPlayers].sort(() => Math.random() - 0.5);
-
-  // Determine power of 2 bracket size (e.g., 4, 8, 16, 32)
-  let bracketSize = 2;
-  while (bracketSize < shuffled.length && bracketSize < 32) {
-    bracketSize *= 2;
-  }
-
-  const generatedMatches: EsportMatch[] = [];
-  const now = Date.now();
-  let matchCounter = 1;
-
-  // Round 1 (Opening round, e.g. Quarts de finale or 8èmes de finale)
-  const round1Pairs = bracketSize / 2;
-  const round1Name =
-    round1Pairs === 1
-      ? "Grande Finale"
-      : round1Pairs === 2
-      ? "Demi-finales"
-      : round1Pairs === 4
-      ? "Quarts de finale"
-      : round1Pairs === 8
-      ? "8èmes de finale"
-      : "16èmes de finale";
-
-  // Pre-generate match IDs for wiring nextMatchId
-  const r1Matches: EsportMatch[] = [];
-  for (let i = 0; i < round1Pairs; i++) {
-    const p1 = shuffled[i * 2];
-    const p2 = shuffled[i * 2 + 1];
-
-    const match: EsportMatch = {
-      id: `M-${tournament.id.replace("tourn-", "T")}-${matchCounter}`,
-      tournamentId: tournament.id,
-      round: 1,
-      roundName: round1Name,
-      matchNumber: matchCounter,
-      player1Id: p1 ? p1.playerId : undefined,
-      player1Tag: p1 ? p1.gamerTag : "Exempté (Bye)",
-      player1Score: 0,
-      player2Id: p2 ? p2.playerId : undefined,
-      player2Tag: p2 ? p2.gamerTag : "Exempté (Bye)",
-      player2Score: 0,
-      status: "À venir",
-      tableOrScreen: `Poste ${String(i + 1).padStart(2, "0")}`,
-      scheduledTime: tournament.time || "10h00",
-      referee: "Arbitre Officiel HG",
-      updatedAt: now,
-    };
-
-    // Auto-advance if bye
-    if (p1 && !p2) {
-      match.winnerId = p1.playerId;
-      match.winnerTag = p1.gamerTag;
-      match.status = "Terminé";
-      match.notes = "Qualification automatique (Exemption)";
-    }
-
-    matchCounter++;
-    r1Matches.push(match);
-    generatedMatches.push(match);
-  }
-
-  // Generate subsequent rounds until Final
-  let previousRoundMatches = r1Matches;
-  let currentRound = 2;
-  let currentPairs = round1Pairs / 2;
-
-  while (currentPairs >= 1) {
-    const currentRoundName =
-      currentPairs === 1
-        ? "Grande Finale"
-        : currentPairs === 2
-        ? "Demi-finales"
-        : currentPairs === 4
-        ? "Quarts de finale"
-        : "8èmes de finale";
-
-    const nextMatches: EsportMatch[] = [];
-    for (let i = 0; i < currentPairs; i++) {
-      const match: EsportMatch = {
-        id: `M-${tournament.id.replace("tourn-", "T")}-${matchCounter}`,
-        tournamentId: tournament.id,
-        round: currentRound,
-        roundName: currentRoundName,
-        matchNumber: matchCounter,
-        player1Tag: "En attente Vainqueur",
-        player1Score: 0,
-        player2Tag: "En attente Vainqueur",
-        player2Score: 0,
-        status: "À venir",
-        tableOrScreen: currentPairs === 1 ? "Scène Centrale (Écran Géant)" : `Poste ${String(i + 1).padStart(2, "0")}`,
-        scheduledTime: tournament.time || "À suivre",
-        referee: "Arbitre Officiel HG",
-        updatedAt: now,
-      };
-
-      // Link child matches from previous round to this parent match
-      const child1 = previousRoundMatches[i * 2];
-      const child2 = previousRoundMatches[i * 2 + 1];
-      if (child1) child1.nextMatchId = match.id;
-      if (child2) child2.nextMatchId = match.id;
-
-      matchCounter++;
-      nextMatches.push(match);
-      generatedMatches.push(match);
-    }
-
-    previousRoundMatches = nextMatches;
-    currentPairs = Math.floor(currentPairs / 2);
-    currentRound++;
-  }
-
-  const log: EsportAuditLog = {
-    id: `log-${Date.now()}`,
-    action: "Génération du tableau officiel",
-    actor: actorName || "Staff Esport",
-    targetId: tournament.id,
-    targetType: "tournoi",
-    details: `Tirage au sort officiel et génération de ${generatedMatches.length} matchs pour « ${tournament.title} » (${validPlayers.length} participants validés).`,
-    timestamp: now,
+  const parseNumeric = (val: string): number | undefined => {
+    const cleanedNum = val.replace(/\s+/g, "").replace(",", ".");
+    if (!cleanedNum || !/^-?\d+(\.\d+)?$/.test(cleanedNum)) return undefined;
+    return Number(cleanedNum);
   };
 
-  return { matches: generatedMatches, log };
+  const parsePosition = (val: string): number | undefined => {
+    const match = val.replace(/\s+/g, "").match(/^#?(\d+)(er|ere|e|eme|th|st|nd|rd)?$/i);
+    if (!match) return undefined;
+    const n = Number(match[1]);
+    return n > 0 ? n : undefined;
+  };
+
+  const parsedEntries: CompetitionRankingEntry[] = [];
+  const baseTs = Date.now();
+
+  dataRows.forEach((cells, rowIdx) => {
+    if (cells.every((c) => !c)) return;
+
+    let position: number | undefined;
+    let gamerTag = "";
+    let fullName = "";
+    let points: number | undefined;
+    let score = "";
+    let wins: number | undefined;
+    let losses: number | undefined;
+    let statsNote = "";
+    let reward = "";
+
+    if (colMap.size > 0) {
+      cells.forEach((cell, colIdx) => {
+        if (!cell) return;
+        const role = colMap.get(colIdx);
+        if (role === "position") position = parsePosition(cell);
+        else if (role === "gamerTag") gamerTag = cell;
+        else if (role === "fullName") fullName = cell;
+        else if (role === "points") {
+          const n = parseNumeric(cell);
+          if (n !== undefined) points = n;
+          else if (!score) score = cell;
+        } else if (role === "score") score = cell;
+        else if (role === "wins") wins = parseNumeric(cell);
+        else if (role === "losses") losses = parseNumeric(cell);
+        else if (role === "statsNote") statsNote = cell;
+        else if (role === "reward") reward = cell;
+      });
+    } else {
+      // Positional fallback without headers:
+      // Case A: [Position, Pseudo, Points/Score, Stats, Reward]
+      // Case B: [Pseudo, Points/Score, Reward]
+      const firstPos = parsePosition(cells[0] || "");
+      let offset = 0;
+      if (firstPos !== undefined && cells.length >= 2) {
+        position = firstPos;
+        gamerTag = cells[1] || "";
+        offset = 2;
+      } else {
+        position = parsedEntries.length + 1;
+        gamerTag = cells[0] || "";
+        offset = 1;
+      }
+
+      const rest = cells.slice(offset).filter((c) => c.length > 0);
+      if (rest[0]) {
+        const asNum = parseNumeric(rest[0]);
+        if (asNum !== undefined) points = asNum;
+        else score = rest[0];
+      }
+      if (rest[1]) {
+        // Check if looks like cash/reward (contains FCFA, $, €, XAF, trophée, lot) or stats
+        if (/(fcfa|xaf|€|\$|trophee|trophée|manette|lot|bon|cadeau)/i.test(rest[1]) && !rest[2]) {
+          reward = rest[1];
+        } else {
+          statsNote = rest[1];
+        }
+      }
+      if (rest[2]) {
+        reward = rest[2];
+      }
+    }
+
+    if (!gamerTag && fullName) {
+      gamerTag = fullName;
+      fullName = "";
+    }
+
+    if (!gamerTag) {
+      warnings.push(`Ligne ${rowIdx + (looksLikeHeader ? 2 : 1)} ignorée (nom/pseudo manquant).`);
+      return;
+    }
+
+    parsedEntries.push({
+      id: `entry-${baseTs}-${rowIdx}`,
+      position: position || parsedEntries.length + 1,
+      gamerTag,
+      fullName: fullName || undefined,
+      points,
+      score: score || undefined,
+      wins,
+      losses,
+      statsNote: statsNote || undefined,
+      reward: reward || undefined,
+    });
+  });
+
+  return {
+    entries: normalizeRankingEntries(parsedEntries),
+    warnings,
+  };
 }
 
 /**
@@ -961,3 +1528,63 @@ export function exportToCsv<T extends object>(data: T[], filename: string): void
   link.click();
   document.body.removeChild(link);
 }
+
+export function exportCompetitionRankingCsv(ranking: CompetitionRanking): void {
+  const rows = normalizeRankingEntries(ranking.entries).map((e) => ({
+    Rang: e.position,
+    Joueur: e.gamerTag,
+    "Nom complet": e.fullName || "",
+    Matchs: e.matchesPlayed ?? ((e.wins ?? 0) + (e.losses ?? 0)),
+    Victoires: e.wins ?? 0,
+    Defaites: e.losses ?? 0,
+    Difference: e.scoreDiff ?? 0,
+    Points: e.points ?? 0,
+    Recompense: e.reward || "",
+  }));
+
+  const slug = (ranking.tournamentTitle || ranking.tournamentId || "competition")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  exportToCsv(rows, `classement-${slug}`);
+}
+
+export function downloadRankingCsvTemplate(): void {
+  const sampleRows = [
+    {
+      Position: 1,
+      Pseudo: "CamerStriker",
+      "Nom complet": "Marc Noah",
+      Points: 2500,
+      Score: "3-1 Finale",
+      Victoires: 6,
+      Defaites: 0,
+      Statistiques: "6V / 0D • Invaincu",
+      Recompense: "150 000 FCFA + Trophée",
+    },
+    {
+      Position: 2,
+      Pseudo: "ShadowAkwa",
+      "Nom complet": "Kevin Etoa",
+      Points: 1950,
+      Score: "1-3 Finale",
+      Victoires: 5,
+      Defaites: 1,
+      Statistiques: "5V / 1D",
+      Recompense: "75 000 FCFA",
+    },
+    {
+      Position: 3,
+      Pseudo: "KingDouala",
+      "Nom complet": "Bryan Talla",
+      Points: 1500,
+      Score: "2-0 Petite Finale",
+      Victoires: 4,
+      Defaites: 2,
+      Statistiques: "4V / 2D",
+      Recompense: "35 000 FCFA",
+    },
+  ];
+  exportToCsv(sampleRows, "modele-classement-house-game-esport");
+}
+

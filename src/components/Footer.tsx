@@ -9,19 +9,27 @@ import {
   User,
   ExternalLink,
 } from "lucide-react";
-import { ShopInfo } from "../types";
+import { ShopInfo, SocialPlatforms } from "../types";
 import { Logo } from "./Logo";
 
 interface FooterProps {
   shopInfo: ShopInfo;
   isAdmin: boolean;
+  socialLinks?: SocialPlatforms;
   onOpenLogin: () => void;
   onOpenSettings: () => void;
 }
 
+const normalizeUrl = (url?: string): string => {
+  const t = (url || "").trim();
+  if (!t) return "";
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+};
+
 export const Footer: React.FC<FooterProps> = ({
   shopInfo,
   isAdmin,
+  socialLinks,
   onOpenLogin,
   onOpenSettings,
 }) => {
@@ -29,6 +37,9 @@ export const Footer: React.FC<FooterProps> = ({
   const gaetanNum = shopInfo.phoneGaetan || "+237 695 978 762";
   const florenceNum = shopInfo.phoneFlorence || "+237 694 853 477";
   const emailAddr = shopInfo.email || "mankolo1974@gmail.com";
+  const fbUrl = normalizeUrl(socialLinks?.facebook);
+  const igUrl = normalizeUrl(socialLinks?.instagram);
+  const ttUrl = normalizeUrl(socialLinks?.tiktok);
 
   return (
     <footer id="main-footer" className="border-t border-white/10 bg-[#050609] text-[#7C8798]">
@@ -47,6 +58,43 @@ export const Footer: React.FC<FooterProps> = ({
                 <span>Matériel certifié & Garantie constructeur</span>
               </span>
             </div>
+            {(fbUrl || igUrl || ttUrl) && (
+              <div className="flex flex-wrap items-center gap-2 pt-2 font-['JetBrains_Mono'] text-[11px]">
+                {fbUrl && (
+                  <a
+                    href={fbUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg border border-[#1877F2]/40 bg-[#1877F2]/10 px-2.5 py-1 text-[#4A9EFF] hover:bg-[#1877F2] hover:text-white transition"
+                  >
+                    <span>Facebook</span>
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+                {igUrl && (
+                  <a
+                    href={igUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg border border-pink-500/40 bg-pink-500/10 px-2.5 py-1 text-pink-400 hover:bg-pink-500 hover:text-white transition"
+                  >
+                    <span>Instagram</span>
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+                {ttUrl && (
+                  <a
+                    href={ttUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-2.5 py-1 text-cyan-300 hover:bg-cyan-500 hover:text-black transition"
+                  >
+                    <span>TikTok</span>
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Contact & Commandes — Ordonné : 1 Payelle / 2 Gaëtan / 3 Florence / Email */}

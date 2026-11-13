@@ -129,7 +129,10 @@
         "presentationText": { "type": "string" },
         "stats": { "type": "array", "items": { "type": "object" } },
         "values": { "type": "array", "items": { "type": "object" } },
-        "bannerImage": { "type": "string" }
+        "bannerImage": { "type": "string" },
+        "aboutText": { "type": "string" },
+        "partners": { "type": "array", "items": { "type": "object" } },
+        "socialLinks": { "type": "object" }
       },
       "required": ["heroTitle"]
     },
@@ -203,6 +206,56 @@
         "expiresAt": { "type": "string" }
       },
       "required": ["id", "playerId", "gamerTag", "fullName", "status"]
+    },
+    "CompetitionRanking": {
+      "title": "CompetitionRanking",
+      "description": "Automatic performance-based ranking and results history per Esport competition and category",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tournamentId": { "type": "string" },
+        "tournamentTitle": { "type": "string" },
+        "game": { "type": "string" },
+        "gameCategory": { "type": "string" },
+        "date": { "type": "string" },
+        "cashPrizePool": { "type": "string" },
+        "isPublished": { "type": "boolean" },
+        "publishedAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "notes": { "type": "string" },
+        "scoringRule": { "type": "object" },
+        "matchHistory": { "type": "array", "items": { "type": "object" } },
+        "entries": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": ["id", "tournamentId", "tournamentTitle", "isPublished", "updatedAt", "entries"]
+    },
+    "VenuePhoto": {
+      "title": "VenuePhoto",
+      "description": "Photo of the House Game gaming arena and rooms",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "imageUrl", "createdAt"]
+    },
+    "TeamMember": {
+      "title": "TeamMember",
+      "description": "House Game team member with photo, name, and role",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "department": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "bio": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "role", "createdAt"]
     }
   },
   "firestore": {
@@ -245,6 +298,18 @@
     "/player_licenses/{licenseId}": {
       "entity": "EsportLicense",
       "description": "Player certified esport licenses"
+    },
+    "/rankings/{rankingId}": {
+      "entity": "CompetitionRanking",
+      "description": "Manual competition final rankings & podiums"
+    },
+    "/venue_photos/{photoId}": {
+      "entity": "VenuePhoto",
+      "description": "Photos of the House Game venue and gaming rooms"
+    },
+    "/team_members/{memberId}": {
+      "entity": "TeamMember",
+      "description": "Team members displayed in Qui sommes-nous"
     }
   }
 }
