@@ -26,7 +26,20 @@ import {
   EsportRegistration,
   VenuePhoto,
   TeamMember,
+  AiConfig,
+  AiKnowledgeItem,
+  AiConversation,
+  AiMarketingCampaign,
+  AiAdminRoleAssignment,
 } from "./types";
+import {
+  DEFAULT_AI_CONFIG,
+  subscribeToAiCampaigns,
+  subscribeToAiConfig,
+  subscribeToAiConversations,
+  subscribeToAiKnowledge,
+  subscribeToAiRoles,
+} from "./services/aiService";
 import {
   loadEsportRegistrations,
   saveEsportRegistrations,
@@ -125,7 +138,8 @@ import { RepairTab } from "./components/RepairTab";
 import { EventsTab } from "./components/EventsTab";
 import { EsportTab } from "./components/EsportTab";
 import { CustomTabContent } from "./components/CustomTabContent";
-import { AiGameMaster } from "./components/AiGameMaster";
+import { HouseGameAiWidget } from "./components/HouseGameAiWidget";
+import { AiCenterTab } from "./components/AiCenterTab";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Extended Admin Modals
@@ -256,6 +270,13 @@ export default function App() {
   const [activitiesBanner, setActivitiesBanner] = useState<ActivitiesBannerInfo>(() => loadActivitiesBanner());
   const [venuePhotos, setVenuePhotos] = useState<VenuePhoto[]>(() => loadVenuePhotos());
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => loadTeamMembers());
+
+  // HOUSE GAME AI States
+  const [aiConfig, setAiConfig] = useState<AiConfig>(DEFAULT_AI_CONFIG);
+  const [aiKnowledge, setAiKnowledge] = useState<AiKnowledgeItem[]>([]);
+  const [aiConversations, setAiConversations] = useState<AiConversation[]>([]);
+  const [aiCampaigns, setAiCampaigns] = useState<AiMarketingCampaign[]>([]);
+  const [aiRoles, setAiRoles] = useState<AiAdminRoleAssignment[]>([]);
 
   // Esport Data States & Live Inscriptions Alerts
   const [esportRegistrations, setEsportRegistrations] = useState<EsportRegistration[]>(() => loadEsportRegistrations());
@@ -422,6 +443,12 @@ export default function App() {
       (err) => console.warn("Team members sync err:", err)
     );
 
+    const unsubAiConfig = subscribeToAiConfig((live) => setAiConfig(live));
+    const unsubAiKnowledge = subscribeToAiKnowledge((live) => setAiKnowledge(live));
+    const unsubAiConversations = subscribeToAiConversations((live) => setAiConversations(live));
+    const unsubAiCampaigns = subscribeToAiCampaigns((live) => setAiCampaigns(live));
+    const unsubAiRoles = subscribeToAiRoles((live) => setAiRoles(live));
+
     const unsubEsportRegs = subscribeToEsportRegistrations(
       (liveRegs) => {
         if (!isInitialMountRef.current) {
@@ -532,6 +559,11 @@ export default function App() {
       unsubHgEvents();
       unsubVenuePhotos();
       unsubTeamMembers();
+      unsubAiConfig();
+      unsubAiKnowledge();
+      unsubAiConversations();
+      unsubAiCampaigns();
+      unsubAiRoles();
       unsubEsportRegs();
       if (bc) {
         try { bc.close(); } catch { /* ignore */ }
@@ -1509,6 +1541,28 @@ export default function App() {
           </ErrorBoundary>
         )}
 
+        {/* TAB 7: HOUSE GAME AI CENTER (Admin Hub) */}
+        {activeTab === "ai-center" && (
+          <ErrorBoundary fallbackTitle="Module AI Center temporairement indisponible">
+            <AiCenterTab
+              isAdmin={isAdmin}
+              shopInfo={shopInfo}
+              aiConfig={aiConfig}
+              knowledgeItems={aiKnowledge}
+              conversations={aiConversations}
+              campaigns={aiCampaigns}
+              roles={aiRoles}
+              products={products}
+              repairServices={repairServices}
+              events={events}
+              tournaments={tournaments}
+              activities={activities}
+              venuePhotos={venuePhotos}
+              teamMembers={teamMembers}
+            />
+          </ErrorBoundary>
+        )}
+
         {/* DYNAMIC CUSTOM TABS */}
         {currentActiveCustomTab && (
           <CustomTabContent
@@ -1864,14 +1918,17 @@ export default function App() {
         </div>
       )}
 
-      {/* Interactive AI Game Master Companion */}
-      <AiGameMaster
+      {/* Interactive HOUSE GAME AI Virtual Assistant */}
+      <HouseGameAiWidget
         currentTab={activeTab}
         onNavigateTab={(tabId) => {
           setActiveTab(tabId);
           window.scrollTo({ top: 0, behavior: "smooth" });
         }}
         shopInfo={shopInfo}
+        aiConfig={aiConfig}
+        conversations={aiConversations}
+        isAdmin={isAdmin}
       />
 
       {/* Real-time Notification Alert for New E-Sport Registrations */}

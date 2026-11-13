@@ -50,11 +50,11 @@ export const Header: React.FC<HeaderProps> = ({
             }}
             onMouseEnter={() => sfx.playHover()}
             className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 font-['JetBrains_Mono'] text-xs font-bold text-cyan-300 transition-all hover:border-cyan-400 hover:bg-cyan-500/20 hover:shadow-[0_0_12px_rgba(0,240,255,0.4)] active:scale-95"
-            title="Ouvrir HG-BOT l'IA Game Master"
+            title="Ouvrir HOUSE GAME AI l'assistant officiel"
           >
             <Bot className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
-            <span className="hidden sm:inline">IA GAME MASTER</span>
-            <span className="sm:hidden">IA</span>
+            <span className="hidden sm:inline">HOUSE GAME AI</span>
+            <span className="sm:hidden">AI</span>
           </button>
 
           {/* Sound FX Toggle */}

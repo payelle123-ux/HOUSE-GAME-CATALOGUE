@@ -354,6 +354,7 @@ export type NavTabId =
   | "campus"
   | "service"
   | "esport"
+  | "ai-center"
   | string;
 
 export interface TickerItem {
@@ -413,4 +414,103 @@ export interface ActivitiesBannerInfo {
   imageUrl?: string;
 }
 
+// ==================== HOUSE GAME AI ASSISTANT TYPES ====================
 
+export type AiRoleName = "super_admin" | "ai_editor" | "marketing_manager" | "viewer";
+
+export interface AiConfig {
+  id: string;
+  enabled: boolean;
+  assistantName: string;
+  welcomeMessage: string;
+  personalityTone: "dynamique_pro" | "expert_gaming" | "conseiller_commercial";
+  fallbackWhatsappMessage: string;
+  whatsappGroupInviteUrl?: string;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+export type AiKnowledgeCategory =
+  | "presentation"
+  | "produits"
+  | "consoles"
+  | "jeux"
+  | "abonnements"
+  | "reparations"
+  | "localisation"
+  | "horaires"
+  | "evenements"
+  | "esport"
+  | "promotions"
+  | "contacts"
+  | "faq";
+
+export interface AiKnowledgeItem {
+  id: string;
+  title: string;
+  category: AiKnowledgeCategory;
+  content: string;
+  tags?: string[];
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+  updatedBy?: string;
+}
+
+export interface AiChatMessage {
+  id: string;
+  sender: "user" | "ai";
+  text: string;
+  timestamp: number;
+  suggestedTab?: NavTabId | null;
+  unanswered?: boolean;
+  needsWhatsappHandoff?: boolean;
+  source?: "gemini" | "fallback";
+}
+
+export interface AiConversation {
+  id: string;
+  visitorLabel: string;
+  channel: "web" | "whatsapp";
+  status: "active" | "transferred" | "resolved";
+  startedAt: number;
+  updatedAt: number;
+  messageCount: number;
+  hasUnanswered: boolean;
+  unansweredQuestions: string[];
+  transferredToWhatsappAt?: number;
+  messages: AiChatMessage[];
+  notes?: string;
+}
+
+export type AiMarketingChannel = "whatsapp_group" | "facebook" | "tiktok" | "instagram";
+export type AiMarketingObjective = "new_arrival" | "promo" | "esport_event" | "general_brand";
+export type AiMarketingCampaignStatus = "draft" | "approved" | "rejected" | "scheduled" | "published";
+
+export interface AiMarketingCampaign {
+  id: string;
+  title: string;
+  channel: AiMarketingChannel;
+  objective: AiMarketingObjective;
+  tone: string;
+  content: string;
+  hashtags?: string[];
+  linkedEntityLabel?: string;
+  status: AiMarketingCampaignStatus;
+  scheduledFor?: string;
+  publishedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+  createdBy?: string;
+  approvedBy?: string;
+}
+
+export interface AiAdminRoleAssignment {
+  id: string;
+  email: string;
+  displayName: string;
+  role: AiRoleName;
+  active: boolean;
+  createdAt: number;
+  updatedAt: number;
+}

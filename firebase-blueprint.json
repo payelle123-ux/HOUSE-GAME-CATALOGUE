@@ -256,6 +256,98 @@
         "createdAt": { "type": "number" }
       },
       "required": ["id", "name", "role", "createdAt"]
+    },
+    "AiConfig": {
+      "title": "AiConfig",
+      "description": "Global configuration for HOUSE GAME AI Assistant",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "assistantName": { "type": "string", "maxLength": 80 },
+        "welcomeMessage": { "type": "string", "maxLength": 1000 },
+        "personalityTone": { "type": "string" },
+        "fallbackWhatsappMessage": { "type": "string", "maxLength": 500 },
+        "whatsappGroupInviteUrl": { "type": "string", "maxLength": 500 },
+        "updatedAt": { "type": "number" },
+        "updatedBy": { "type": "string", "maxLength": 120 }
+      },
+      "required": ["id", "enabled", "assistantName", "welcomeMessage", "updatedAt"]
+    },
+    "AiKnowledgeItem": {
+      "title": "AiKnowledgeItem",
+      "description": "Structured knowledge base entry used by HOUSE GAME AI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 160 },
+        "category": { "type": "string", "maxLength": 50 },
+        "content": { "type": "string", "maxLength": 4000 },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "updatedBy": { "type": "string", "maxLength": 120 }
+      },
+      "required": ["id", "title", "category", "content", "isActive", "createdAt", "updatedAt"]
+    },
+    "AiConversation": {
+      "title": "AiConversation",
+      "description": "Logged visitor or WhatsApp conversation with HOUSE GAME AI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "visitorLabel": { "type": "string", "maxLength": 120 },
+        "channel": { "type": "string", "enum": ["web", "whatsapp"] },
+        "status": { "type": "string", "enum": ["active", "transferred", "resolved"] },
+        "startedAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "messageCount": { "type": "number" },
+        "hasUnanswered": { "type": "boolean" },
+        "unansweredQuestions": { "type": "array", "items": { "type": "string" } },
+        "transferredToWhatsappAt": { "type": "number" },
+        "messages": { "type": "array", "items": { "type": "object" } },
+        "notes": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["id", "visitorLabel", "channel", "status", "startedAt", "updatedAt", "messages"]
+    },
+    "AiMarketingCampaign": {
+      "title": "AiMarketingCampaign",
+      "description": "AI-generated marketing or WhatsApp announcement campaign",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 180 },
+        "channel": { "type": "string" },
+        "objective": { "type": "string" },
+        "tone": { "type": "string", "maxLength": 80 },
+        "content": { "type": "string", "maxLength": 5000 },
+        "hashtags": { "type": "array", "items": { "type": "string" } },
+        "linkedEntityLabel": { "type": "string", "maxLength": 180 },
+        "status": { "type": "string", "enum": ["draft", "approved", "rejected", "scheduled", "published"] },
+        "scheduledFor": { "type": "string", "maxLength": 80 },
+        "publishedAt": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "createdBy": { "type": "string", "maxLength": 120 },
+        "approvedBy": { "type": "string", "maxLength": 120 }
+      },
+      "required": ["id", "title", "channel", "content", "status", "createdAt", "updatedAt"]
+    },
+    "AiAdminRoleAssignment": {
+      "title": "AiAdminRoleAssignment",
+      "description": "Role-based access control assignment for HOUSE GAME AI CENTER",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "maxLength": 180 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "enum": ["super_admin", "ai_editor", "marketing_manager", "viewer"] },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "email", "displayName", "role", "active", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -310,6 +402,26 @@
     "/team_members/{memberId}": {
       "entity": "TeamMember",
       "description": "Team members displayed in Qui sommes-nous"
+    },
+    "/ai_config/{configId}": {
+      "entity": "AiConfig",
+      "description": "HOUSE GAME AI Assistant global configuration"
+    },
+    "/ai_knowledge/{itemId}": {
+      "entity": "AiKnowledgeItem",
+      "description": "Centralized AI knowledge base entries"
+    },
+    "/ai_conversations/{conversationId}": {
+      "entity": "AiConversation",
+      "description": "Visitor and WhatsApp conversation logs"
+    },
+    "/ai_marketing_campaigns/{campaignId}": {
+      "entity": "AiMarketingCampaign",
+      "description": "AI marketing and WhatsApp announcement drafts & campaigns"
+    },
+    "/ai_roles/{roleId}": {
+      "entity": "AiAdminRoleAssignment",
+      "description": "Admin role permissions for HOUSE GAME AI CENTER"
     }
   }
 }

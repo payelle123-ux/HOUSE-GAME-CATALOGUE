@@ -97,5 +97,68 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    function isValidAiDocId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // HOUSE GAME AI: Global assistant settings
+    match /ai_config/{configId} {
+      allow read: if true;
+      allow create, update: if isValidAiDocId(configId)
+        && request.resource.data.keys().hasAll(['id', 'enabled', 'assistantName', 'welcomeMessage', 'updatedAt'])
+        && request.resource.data.enabled is bool
+        && request.resource.data.assistantName is string && request.resource.data.assistantName.size() <= 80
+        && request.resource.data.welcomeMessage is string && request.resource.data.welcomeMessage.size() <= 1000
+        && request.resource.data.updatedAt is number;
+      allow delete: if isValidAiDocId(configId);
+    }
+
+    // HOUSE GAME AI: Centralized knowledge base
+    match /ai_knowledge/{itemId} {
+      allow read: if true;
+      allow create, update: if isValidAiDocId(itemId)
+        && request.resource.data.keys().hasAll(['id', 'title', 'category', 'content', 'isActive', 'createdAt', 'updatedAt'])
+        && request.resource.data.title is string && request.resource.data.title.size() <= 160
+        && request.resource.data.category is string && request.resource.data.category.size() <= 50
+        && request.resource.data.content is string && request.resource.data.content.size() <= 4000
+        && request.resource.data.isActive is bool;
+      allow delete: if isValidAiDocId(itemId);
+    }
+
+    // HOUSE GAME AI: Visitor & WhatsApp conversation logs
+    match /ai_conversations/{conversationId} {
+      allow read: if true;
+      allow create, update: if isValidAiDocId(conversationId)
+        && request.resource.data.keys().hasAll(['id', 'visitorLabel', 'channel', 'status', 'startedAt', 'updatedAt', 'messages'])
+        && request.resource.data.visitorLabel is string && request.resource.data.visitorLabel.size() <= 120
+        && request.resource.data.channel in ['web', 'whatsapp']
+        && request.resource.data.status in ['active', 'transferred', 'resolved']
+        && request.resource.data.messages is list && request.resource.data.messages.size() <= 200;
+      allow delete: if isValidAiDocId(conversationId);
+    }
+
+    // HOUSE GAME AI: Marketing & WhatsApp campaigns
+    match /ai_marketing_campaigns/{campaignId} {
+      allow read: if true;
+      allow create, update: if isValidAiDocId(campaignId)
+        && request.resource.data.keys().hasAll(['id', 'title', 'channel', 'content', 'status', 'createdAt', 'updatedAt'])
+        && request.resource.data.title is string && request.resource.data.title.size() <= 180
+        && request.resource.data.content is string && request.resource.data.content.size() <= 5000
+        && request.resource.data.status in ['draft', 'approved', 'rejected', 'scheduled', 'published'];
+      allow delete: if isValidAiDocId(campaignId);
+    }
+
+    // HOUSE GAME AI: Role permissions for AI Center
+    match /ai_roles/{roleId} {
+      allow read: if true;
+      allow create, update: if isValidAiDocId(roleId)
+        && request.resource.data.keys().hasAll(['id', 'email', 'displayName', 'role', 'active', 'createdAt', 'updatedAt'])
+        && request.resource.data.email is string && request.resource.data.email.size() <= 180
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 120
+        && request.resource.data.role in ['super_admin', 'ai_editor', 'marketing_manager', 'viewer']
+        && request.resource.data.active is bool;
+      allow delete: if isValidAiDocId(roleId);
+    }
   }
 }

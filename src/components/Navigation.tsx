@@ -16,6 +16,7 @@ import {
   Users,
   Swords,
   Trophy,
+  Bot,
 } from "lucide-react";
 import { CustomTab, NavTabId } from "../types";
 import { sfx } from "../services/soundEffects";
@@ -90,6 +91,16 @@ export const Navigation: React.FC<NavigationProps> = ({
       badge: pendingEsportCount && pendingEsportCount > 0 ? pendingEsportCount : undefined,
       color: "text-[#00FF88]",
     },
+    ...(isAdmin
+      ? [
+          {
+            id: "ai-center",
+            label: "AI CENTER",
+            icon: Bot,
+            color: "text-cyan-400",
+          },
+        ]
+      : []),
   ];
 
   const getCustomIcon = (iconName?: string) => {
