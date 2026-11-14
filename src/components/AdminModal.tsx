@@ -461,6 +461,7 @@ interface ShopSettingsModalProps {
   onSaveShopInfo: (info: ShopInfo) => void;
   products: Product[];
   onRestoreProducts: (products: Product[]) => void;
+  onMergeProducts?: (products: Product[]) => Promise<Product[]>;
 }
 
 export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
@@ -470,10 +471,12 @@ export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
   onSaveShopInfo,
   products,
   onRestoreProducts,
+  onMergeProducts,
 }) => {
   const [formData, setFormData] = useState<ShopInfo>({ ...shopInfo });
   const [tab, setTab] = useState<"info" | "data">("info");
   const [successMsg, setSuccessMsg] = useState("");
+  const [confirmHardReset, setConfirmHardReset] = useState(false);
   const jsonImportRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -525,9 +528,66 @@ export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
     reader.readAsText(file);
   };
 
+  const handleMergeDefaults = async () => {
+    try {
+      const beforeCount = products.length;
+      if (onMergeProducts) {
+        const merged = await onMergeProducts(INITIAL_PRODUCTS);
+        const addedCount = Math.max(0, merged.length - beforeCount);
+        setSuccessMsg(
+          addedCount > 0
+            ? `${addedCount} article(s) du catalogue de base restauré(s) sans toucher à vos articles personnalisés !`
+            : "Tous les articles du catalogue de base sont déjà présents."
+        );
+      } else {
+        const existingIds = new Set(products.map((p) => p.id));
+        const missing = INITIAL_PRODUCTS.filter((p) => !existingIds.has(p.id));
+        onRestoreProducts([...products, ...missing]);
+        setSuccessMsg(`${missing.length} article(s) restauré(s) en conservant vos articles !`);
+      }
+    } catch (err) {
+      console.warn("Merge defaults error:", err);
+    }
+  };
+
+  const handleRecoverLocalCache = async () => {
+    try {
+      const candidateKeys = ["hg_products_v3", "hg_products_v2", "hg_products_v1", "hg_products"];
+      const existingIds = new Set(products.map((p) => p.id));
+      const recovered: Product[] = [];
+      for (const key of candidateKeys) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          const parsed = JSON.parse(raw);
+          const list = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.data) ? parsed.data : [];
+          list.forEach((item: Product) => {
+            if (item && item.id && item.name && !existingIds.has(item.id)) {
+              existingIds.add(item.id);
+              recovered.push(item);
+            }
+          });
+        } catch {}
+      }
+      if (recovered.length === 0) {
+        setSuccessMsg("Aucun article supplémentaire trouvé dans le cache local de ce navigateur.");
+        return;
+      }
+      if (onMergeProducts) {
+        await onMergeProducts(recovered);
+      } else {
+        onRestoreProducts([...recovered, ...products]);
+      }
+      setSuccessMsg(`${recovered.length} article(s) récupéré(s) depuis ce navigateur et synchronisé(s) !`);
+    } catch (err) {
+      console.warn("Recover local cache error:", err);
+    }
+  };
+
   const handleResetDefaults = () => {
     try {
       onRestoreProducts(INITIAL_PRODUCTS);
+      setConfirmHardReset(false);
       setSuccessMsg("Catalogue réinitialisé avec le catalogue de démonstration !");
     } catch (err) {
       console.warn("Reset defaults error:", err);
@@ -754,21 +814,64 @@ export const ShopSettingsModal: React.FC<ShopSettingsModalProps> = ({
                 />
               </div>
 
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2.5">
+                <h4 className="font-bold text-emerald-300 flex items-center gap-2">
+                  <Sparkles size={14} />
+                  RESTAURATION SANS PERTE DE VOS ARTICLES
+                </h4>
+                <p className="text-[#7C8798]">
+                  Restaure les articles manquants du catalogue de base ou récupère les articles sauvegardés sur ce navigateur, tout en conservant vos articles personnalisés.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    onClick={handleMergeDefaults}
+                    className="flex items-center gap-2 rounded border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 font-bold text-emerald-300 hover:bg-emerald-500/25"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Compléter avec le catalogue de base</span>
+                  </button>
+                  <button
+                    onClick={handleRecoverLocalCache}
+                    className="flex items-center gap-2 rounded border border-[#3E9BFF]/40 bg-[#3E9BFF]/15 px-3 py-2 font-bold text-[#3E9BFF] hover:bg-[#3E9BFF]/25"
+                  >
+                    <Upload size={13} />
+                    <span>Récupérer du cache navigateur</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
                 <h4 className="font-bold text-red-400 flex items-center gap-2 mb-1">
                   <RotateCcw size={14} />
-                  RÉINITIALISER LES DONNÉES
+                  RÉINITIALISATION COMPLÈTE (EFFACE LES AJOUTS)
                 </h4>
                 <p className="text-[#7C8798] mb-3">
-                  Remet le catalogue par défaut avec les manettes et consoles de démonstration.
+                  Remplace tout le catalogue par les 16 articles de démonstration uniquement (attention : supprime vos articles ajoutés manuellement).
                 </p>
-                <button
-                  onClick={handleResetDefaults}
-                  className="flex items-center gap-2 rounded border border-red-500/40 bg-red-500/15 px-3.5 py-2 font-bold text-red-300 hover:bg-red-500/25"
-                >
-                  <RotateCcw size={14} />
-                  <span>Réinitialiser</span>
-                </button>
+                {confirmHardReset ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleResetDefaults}
+                      className="flex items-center gap-2 rounded border border-red-500 bg-red-600 px-3.5 py-2 font-bold text-white hover:bg-red-500"
+                    >
+                      <span>Confirmer la réinitialisation</span>
+                    </button>
+                    <button
+                      onClick={() => setConfirmHardReset(false)}
+                      className="rounded border border-white/15 bg-white/5 px-3.5 py-2 text-slate-300 hover:bg-white/10"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmHardReset(true)}
+                    className="flex items-center gap-2 rounded border border-red-500/40 bg-red-500/15 px-3.5 py-2 font-bold text-red-300 hover:bg-red-500/25"
+                  >
+                    <RotateCcw size={14} />
+                    <span>Réinitialiser le catalogue</span>
+                  </button>
+                )}
               </div>
             </div>
           )}

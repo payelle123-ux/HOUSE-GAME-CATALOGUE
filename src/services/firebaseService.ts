@@ -350,6 +350,70 @@ export async function restoreCatalogCloud(newProducts: Product[]): Promise<void>
   }
 }
 
+export async function mergeProductsCloud(productsToMerge: Product[]): Promise<Product[]> {
+  const current = loadProducts();
+  const byId = new Map<string, Product>();
+
+  current.forEach((p) => {
+    if (p && p.id) byId.set(p.id, p);
+  });
+
+  const added: Product[] = [];
+  productsToMerge.forEach((p) => {
+    if (p && p.id && !byId.has(p.id)) {
+      const normalized: Product = {
+        ...p,
+        price: Number(p.price) || 0,
+        createdAt: p.createdAt || Date.now(),
+        updatedAt: Date.now(),
+      };
+      byId.set(p.id, normalized);
+      added.push(normalized);
+    }
+  });
+
+  const merged = Array.from(byId.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  firestoreCache.set("products", merged, DEFAULT_TTLS.PRODUCTS, "hg_products_v3");
+  saveProducts(merged);
+  productsSubscribers.forEach((cb) => {
+    try { cb(merged); } catch { /* ignore */ }
+  });
+
+  if (added.length > 0) {
+    try {
+      const batch = writeBatch(db);
+      added.forEach((p) => {
+        const docRef = doc(db, PRODUCTS_COLL, p.id);
+        batch.set(
+          docRef,
+          {
+            id: p.id,
+            name: p.name || "",
+            category: p.category || "Gaming",
+            price: Number(p.price) || 0,
+            originalPrice: p.originalPrice ? Number(p.originalPrice) : null,
+            description: p.description || "",
+            image: p.image || "",
+            badge: p.badge || "",
+            inStock: p.inStock !== false,
+            featured: Boolean(p.featured),
+            specs: Array.isArray(p.specs) ? p.specs : [],
+            createdAt: p.createdAt || Date.now(),
+            updatedAt: p.updatedAt || Date.now(),
+          },
+          { merge: true }
+        );
+      });
+      await batch.commit();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, PRODUCTS_COLL);
+    }
+  }
+
+  return merged;
+}
+
 // ==================== STORE SETTINGS (CACHE-FIRST) ====================
 
 export function subscribeToShopInfo(

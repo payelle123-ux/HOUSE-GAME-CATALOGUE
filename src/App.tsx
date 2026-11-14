@@ -83,6 +83,7 @@ import {
   deleteProductCloud,
   saveShopInfoCloud,
   restoreCatalogCloud,
+  mergeProductsCloud,
   subscribeToRepairServices,
   saveRepairServiceCloud,
   deleteRepairServiceCloud,
@@ -715,6 +716,18 @@ export default function App() {
       await restoreCatalogCloud(newProducts);
     } catch (err) {
       console.error("Cloud restore failed, restored locally:", err);
+    }
+  };
+
+  const handleMergeProducts = async (productsToAdd: Product[]): Promise<Product[]> => {
+    try {
+      const merged = await mergeProductsCloud(productsToAdd);
+      setProducts(merged);
+      saveProducts(merged);
+      return merged;
+    } catch (err) {
+      console.error("Cloud merge failed:", err);
+      return products;
     }
   };
 
@@ -1666,6 +1679,7 @@ export default function App() {
         onSaveShopInfo={handleSaveShopInfo}
         products={products}
         onRestoreProducts={handleRestoreProducts}
+        onMergeProducts={handleMergeProducts}
       />
 
       {/* Home Content Modal */}

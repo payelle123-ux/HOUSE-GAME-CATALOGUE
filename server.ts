@@ -5,6 +5,18 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { initializeApp as initializeFirebaseApp, getApps as getFirebaseApps } from "firebase/app";
+import {
+  getFirestore as getClientFirestore,
+  collection as fsCollection,
+  doc as fsDoc,
+  getDocs as fsGetDocs,
+  getDoc as fsGetDoc,
+  setDoc as fsSetDoc,
+  limit as fsLimit,
+  query as fsQuery,
+  Firestore,
+} from "firebase/firestore";
 
 dotenv.config();
 
@@ -46,85 +58,53 @@ try {
   console.warn("[HOUSE GAME AI] Impossible de lire firebase-applet-config.json :", err);
 }
 
-function getFirestoreBaseUrl(): string | null {
+let serverDb: Firestore | null = null;
+function getServerFirestore(): Firestore | null {
+  if (serverDb) return serverDb;
   if (!firebaseConfig?.projectId || !firebaseConfig?.apiKey) return null;
-  const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-  return `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${encodeURIComponent(dbId)}/documents`;
+  try {
+    const fbApp = getFirebaseApps().length === 0 ? initializeFirebaseApp(firebaseConfig) : getFirebaseApps()[0];
+    serverDb =
+      firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)"
+        ? getClientFirestore(fbApp, firebaseConfig.firestoreDatabaseId)
+        : getClientFirestore(fbApp);
+    return serverDb;
+  } catch (err) {
+    console.warn("[HOUSE GAME AI] Impossible d'initialiser Firestore SDK :", err);
+    return null;
+  }
 }
 
-function decodeFirestoreValue(val: any): any {
-  if (!val || typeof val !== "object") return undefined;
-  if ("stringValue" in val) return val.stringValue;
-  if ("integerValue" in val) return Number(val.integerValue);
-  if ("doubleValue" in val) return Number(val.doubleValue);
-  if ("booleanValue" in val) return Boolean(val.booleanValue);
-  if ("nullValue" in val) return null;
-  if ("timestampValue" in val) return val.timestampValue;
-  if ("arrayValue" in val) {
-    const values = Array.isArray(val.arrayValue?.values) ? val.arrayValue.values : [];
-    return values.map(decodeFirestoreValue);
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallbackValue: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallbackValue), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  if ("mapValue" in val) {
-    const fields = val.mapValue?.fields || {};
-    const out: Record<string, any> = {};
-    for (const [k, v] of Object.entries(fields)) {
-      out[k] = decodeFirestoreValue(v);
-    }
-    return out;
-  }
-  return undefined;
-}
-
-function decodeFirestoreDocument(doc: any): Record<string, any> | null {
-  if (!doc || !doc.fields) return null;
-  const out: Record<string, any> = {};
-  for (const [k, v] of Object.entries(doc.fields)) {
-    out[k] = decodeFirestoreValue(v);
-  }
-  if (!out.id && typeof doc.name === "string") {
-    const parts = doc.name.split("/");
-    out.id = parts[parts.length - 1];
-  }
-  return out;
-}
-
-function encodeFirestoreValue(val: any): any {
-  if (val === null || val === undefined) return { nullValue: null };
-  if (typeof val === "string") return { stringValue: val };
-  if (typeof val === "boolean") return { booleanValue: val };
-  if (typeof val === "number") {
-    if (Number.isInteger(val)) return { integerValue: String(val) };
-    return { doubleValue: val };
-  }
-  if (Array.isArray(val)) {
-    return {
-      arrayValue: {
-        values: val.map(encodeFirestoreValue),
-      },
-    };
-  }
-  if (typeof val === "object") {
-    const fields: Record<string, any> = {};
-    for (const [k, v] of Object.entries(val)) {
-      if (v !== undefined) {
-        fields[k] = encodeFirestoreValue(v);
-      }
-    }
-    return { mapValue: { fields } };
-  }
-  return { stringValue: String(val) };
 }
 
 async function fetchFirestoreCollection(collectionName: string, pageSize = 150): Promise<any[]> {
-  const baseUrl = getFirestoreBaseUrl();
-  if (!baseUrl || !firebaseConfig?.apiKey) return [];
+  const db = getServerFirestore();
+  if (!db) return [];
   try {
-    const url = `${baseUrl}/${collectionName}?pageSize=${pageSize}&key=${encodeURIComponent(firebaseConfig.apiKey)}`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = (await res.json()) as { documents?: any[] };
-    if (!Array.isArray(data.documents)) return [];
-    return data.documents.map(decodeFirestoreDocument).filter(Boolean) as any[];
+    const q = fsQuery(fsCollection(db, collectionName), fsLimit(pageSize));
+    const snap = await withTimeout(fsGetDocs(q), 4500, null as any);
+    if (!snap) {
+      console.warn(`[HOUSE GAME AI] Timeout lecture collection ${collectionName}`);
+      return [];
+    }
+    const items: any[] = [];
+    snap.forEach((docSnap: any) => {
+      const data = docSnap.data();
+      items.push({ id: docSnap.id, ...data });
+    });
+    return items;
   } catch (err) {
     console.warn(`[HOUSE GAME AI] Erreur lecture collection ${collectionName}:`, err);
     return [];
@@ -132,14 +112,12 @@ async function fetchFirestoreCollection(collectionName: string, pageSize = 150):
 }
 
 async function fetchFirestoreDoc(collectionName: string, docId: string): Promise<Record<string, any> | null> {
-  const baseUrl = getFirestoreBaseUrl();
-  if (!baseUrl || !firebaseConfig?.apiKey) return null;
+  const db = getServerFirestore();
+  if (!db) return null;
   try {
-    const url = `${baseUrl}/${collectionName}/${encodeURIComponent(docId)}?key=${encodeURIComponent(firebaseConfig.apiKey)}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return decodeFirestoreDocument(data);
+    const snap = await withTimeout(fsGetDoc(fsDoc(db, collectionName, docId)), 4500, null as any);
+    if (!snap || !snap.exists()) return null;
+    return { id: snap.id, ...snap.data() };
   } catch (err) {
     console.warn(`[HOUSE GAME AI] Erreur lecture document ${collectionName}/${docId}:`, err);
     return null;
@@ -147,23 +125,13 @@ async function fetchFirestoreDoc(collectionName: string, docId: string): Promise
 }
 
 async function upsertFirestoreDoc(collectionName: string, docId: string, payload: Record<string, any>): Promise<boolean> {
-  const baseUrl = getFirestoreBaseUrl();
-  if (!baseUrl || !firebaseConfig?.apiKey) return false;
+  const db = getServerFirestore();
+  if (!db) return false;
   try {
     const cleanId = docId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 128);
-    const fields: Record<string, any> = {};
-    for (const [k, v] of Object.entries(payload)) {
-      if (v !== undefined) {
-        fields[k] = encodeFirestoreValue(v);
-      }
-    }
-    const url = `${baseUrl}/${collectionName}/${encodeURIComponent(cleanId)}?key=${encodeURIComponent(firebaseConfig.apiKey)}`;
-    const res = await fetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fields }),
-    });
-    return res.ok;
+    const sanitized = JSON.parse(JSON.stringify(payload));
+    await fsSetDoc(fsDoc(db, collectionName, cleanId), sanitized, { merge: true });
+    return true;
   } catch (err) {
     console.warn(`[HOUSE GAME AI] Erreur écriture ${collectionName}/${docId}:`, err);
     return false;
@@ -195,57 +163,57 @@ interface KnowledgeSnapshot {
   contextText: string;
 }
 
-const KNOWLEDGE_CACHE_TTL_MS = 15_000;
+const KNOWLEDGE_CACHE_TTL_MS = 60_000;
+const KNOWLEDGE_STALE_TTL_MS = 300_000;
 let cachedKnowledge: KnowledgeSnapshot | null = null;
+let knowledgeRefreshInFlight: Promise<KnowledgeSnapshot> | null = null;
 
-async function buildLiveKnowledgeContext(forceRefresh = false): Promise<KnowledgeSnapshot> {
-  const now = Date.now();
-  if (!forceRefresh && cachedKnowledge && now - cachedKnowledge.builtAt < KNOWLEDGE_CACHE_TTL_MS) {
-    return cachedKnowledge;
-  }
+async function refreshLiveKnowledgeNow(): Promise<KnowledgeSnapshot> {
+  if (knowledgeRefreshInFlight) return knowledgeRefreshInFlight;
+  knowledgeRefreshInFlight = (async () => {
+    const now = Date.now();
+    const [
+      aiConfigDoc,
+      shopInfoDoc,
+      homeOverviewDoc,
+      hgEventsDoc,
+      products,
+      repairServices,
+      events,
+      tournaments,
+      rankings,
+      activities,
+      venuePhotos,
+      teamMembers,
+      customKnowledge,
+    ] = await Promise.all([
+      fetchFirestoreDoc("ai_config", "main"),
+      fetchFirestoreDoc("settings", "housegame_info"),
+      fetchFirestoreDoc("home_content", "overview"),
+      fetchFirestoreDoc("home_content", "hg_events_official"),
+      fetchFirestoreCollection("products", 150),
+      fetchFirestoreCollection("repair_services", 80),
+      fetchFirestoreCollection("events", 80),
+      fetchFirestoreCollection("tournaments", 80),
+      fetchFirestoreCollection("rankings", 80),
+      fetchFirestoreCollection("activities", 50),
+      fetchFirestoreCollection("venue_photos", 50),
+      fetchFirestoreCollection("team_members", 50),
+      fetchFirestoreCollection("ai_knowledge", 150),
+    ]);
 
-  const [
-    aiConfigDoc,
-    shopInfoDoc,
-    homeOverviewDoc,
-    hgEventsDoc,
-    products,
-    repairServices,
-    events,
-    tournaments,
-    rankings,
-    activities,
-    venuePhotos,
-    teamMembers,
-    customKnowledge,
-  ] = await Promise.all([
-    fetchFirestoreDoc("ai_config", "main"),
-    fetchFirestoreDoc("settings", "housegame_info"),
-    fetchFirestoreDoc("home_content", "overview"),
-    fetchFirestoreDoc("home_content", "hg_events_official"),
-    fetchFirestoreCollection("products", 150),
-    fetchFirestoreCollection("repair_services", 80),
-    fetchFirestoreCollection("events", 80),
-    fetchFirestoreCollection("tournaments", 80),
-    fetchFirestoreCollection("rankings", 80),
-    fetchFirestoreCollection("activities", 50),
-    fetchFirestoreCollection("venue_photos", 50),
-    fetchFirestoreCollection("team_members", 50),
-    fetchFirestoreCollection("ai_knowledge", 150),
-  ]);
-
-  const aiConfig = {
-    enabled: aiConfigDoc?.enabled !== false,
-    assistantName: aiConfigDoc?.assistantName || "HOUSE GAME AI",
-    welcomeMessage:
-      aiConfigDoc?.welcomeMessage ||
-      "Bienvenue chez HOUSE GAME ! Je suis HOUSE GAME AI, ton assistant virtuel officiel. Comment puis-je t'aider aujourd'hui ?",
-    personalityTone: aiConfigDoc?.personalityTone || "dynamique_pro",
-    fallbackWhatsappMessage:
-      aiConfigDoc?.fallbackWhatsappMessage ||
-      "Cette information précise n'est pas encore renseignée dans notre base officielle. Tu peux contacter directement notre équipe sur WhatsApp pour obtenir une réponse immédiate !",
-    whatsappGroupInviteUrl: aiConfigDoc?.whatsappGroupInviteUrl || "",
-  };
+    const aiConfig = {
+      enabled: aiConfigDoc?.enabled !== false,
+      assistantName: aiConfigDoc?.assistantName || "HOUSE GAME AI",
+      welcomeMessage:
+        aiConfigDoc?.welcomeMessage ||
+        "Bienvenue chez **HOUSE GAME** ! Je suis **HOUSE GAME AI**, votre assistant virtuel officiel. Découvrez notre Boutique, notre Atelier de réparation, nos Activités, nos Événements et l'Arène E-Sport !",
+      personalityTone: aiConfigDoc?.personalityTone || "dynamique_pro",
+      fallbackWhatsappMessage:
+        aiConfigDoc?.fallbackWhatsappMessage ||
+        "Cette information précise n'est pas encore renseignée dans notre base officielle. Tu peux contacter directement notre équipe sur WhatsApp pour obtenir une réponse immédiate !",
+      whatsappGroupInviteUrl: aiConfigDoc?.whatsappGroupInviteUrl || "",
+    };
 
   const shopInfo = {
     name: shopInfoDoc?.name || "HOUSE GAME",
@@ -392,25 +360,48 @@ async function buildLiveKnowledgeContext(forceRefresh = false): Promise<Knowledg
     }
   }
 
-  const snapshot: KnowledgeSnapshot = {
-    builtAt: now,
-    aiConfig,
-    shopInfo,
-    products,
-    repairServices,
-    events,
-    hgEventsOfficial,
-    tournaments,
-    rankings,
-    activities,
-    venuePhotos,
-    teamMembers,
-    customKnowledge: activeCustomKnowledge,
-    contextText: lines.join("\n"),
-  };
+    const snapshot: KnowledgeSnapshot = {
+      builtAt: now,
+      aiConfig,
+      shopInfo,
+      products,
+      repairServices,
+      events,
+      hgEventsOfficial,
+      tournaments,
+      rankings,
+      activities,
+      venuePhotos,
+      teamMembers,
+      customKnowledge: activeCustomKnowledge,
+      contextText: lines.join("\n"),
+    };
 
-  cachedKnowledge = snapshot;
-  return snapshot;
+    cachedKnowledge = snapshot;
+    return snapshot;
+  })().finally(() => {
+    knowledgeRefreshInFlight = null;
+  });
+
+  return knowledgeRefreshInFlight;
+}
+
+async function buildLiveKnowledgeContext(forceRefresh = false): Promise<KnowledgeSnapshot> {
+  const now = Date.now();
+  if (!forceRefresh && cachedKnowledge) {
+    const age = now - cachedKnowledge.builtAt;
+    if (age < KNOWLEDGE_CACHE_TTL_MS) {
+      return cachedKnowledge;
+    }
+    if (age < KNOWLEDGE_STALE_TTL_MS) {
+      // Stale-while-revalidate: serve immediately and refresh in background
+      void refreshLiveKnowledgeNow().catch((err) =>
+        console.warn("[HOUSE GAME AI] Background knowledge refresh error:", err)
+      );
+      return cachedKnowledge;
+    }
+  }
+  return refreshLiveKnowledgeNow();
 }
 
 function getToneInstruction(tone: string): string {
@@ -421,6 +412,177 @@ function getToneInstruction(tone: string): string {
     return "Adopte un ton de conseiller commercial chaleureux, orienté service client, clarté des prix, et accompagnement à la commande.";
   }
   return "Adopte un ton accueillant, dynamique, professionnel et passionné par l'univers gaming.";
+}
+
+function sanitizeChatContents(
+  history: Array<{ sender: string; text: string }> | undefined,
+  currentMessage: string,
+  currentTab: string
+): Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> {
+  const rawTurns: Array<{ role: "user" | "model"; text: string }> = [];
+
+  if (Array.isArray(history)) {
+    const recent = history.slice(-10);
+    for (const item of recent) {
+      const text = String(item?.text || "").trim();
+      if (!text) continue;
+      rawTurns.push({
+        role: item?.sender === "user" ? "user" : "model",
+        text: text.slice(0, 1500),
+      });
+    }
+  }
+
+  // Avoid duplicating the current message if the client included it at the end of history
+  const normalizedCurrent = currentMessage.trim();
+  while (
+    rawTurns.length > 0 &&
+    rawTurns[rawTurns.length - 1].role === "user" &&
+    rawTurns[rawTurns.length - 1].text.trim() === normalizedCurrent
+  ) {
+    rawTurns.pop();
+  }
+
+  // Gemini requires contents to start with a "user" turn
+  while (rawTurns.length > 0 && rawTurns[0].role === "model") {
+    rawTurns.shift();
+  }
+
+  // Append current user turn with active tab context
+  rawTurns.push({
+    role: "user",
+    text: `[Onglet actuel du visiteur : "${currentTab || "home"}"]\nMessage : ${normalizedCurrent}`,
+  });
+
+  // Merge consecutive turns of the same role so user/model alternate strictly
+  const alternating: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
+  for (const turn of rawTurns) {
+    const prev = alternating[alternating.length - 1];
+    if (prev && prev.role === turn.role) {
+      prev.parts[0].text = `${prev.parts[0].text}\n\n${turn.text}`;
+    } else {
+      alternating.push({
+        role: turn.role,
+        parts: [{ text: turn.text }],
+      });
+    }
+  }
+
+  return alternating;
+}
+
+function classifyGeminiError(err: any): { status: number; code: string; message: string; retryable: boolean } {
+  const rawStatus = Number(err?.status || err?.statusCode || err?.code || 0);
+  const rawMsg = String(err?.message || "");
+  const lower = rawMsg.toLowerCase();
+
+  if (rawStatus === 400 || lower.includes("api_key_invalid") || lower.includes("invalid argument")) {
+    if (lower.includes("api key") || lower.includes("api_key_invalid")) {
+      return {
+        status: 400,
+        code: "API_KEY_INVALID",
+        message: "Clé API Gemini invalide. Vérifiez GEMINI_API_KEY dans Settings > Secrets.",
+        retryable: false,
+      };
+    }
+    return {
+      status: 400,
+      code: "BAD_REQUEST",
+      message: `Requête IA refusée : ${rawMsg.slice(0, 180)}`,
+      retryable: false,
+    };
+  }
+  if (rawStatus === 403 || lower.includes("permission_denied")) {
+    return {
+      status: 403,
+      code: "PERMISSION_DENIED",
+      message: "Accès Gemini refusé (403). Vérifiez la clé API dans Settings > Secrets.",
+      retryable: false,
+    };
+  }
+  if (rawStatus === 404 || lower.includes("not_found")) {
+    return {
+      status: 404,
+      code: "MODEL_NOT_FOUND",
+      message: "Modèle Gemini introuvable (404).",
+      retryable: false,
+    };
+  }
+  if (rawStatus === 429 || lower.includes("resource_exhausted") || lower.includes("quota")) {
+    return {
+      status: 429,
+      code: "RESOURCE_EXHAUSTED",
+      message: "Limite de requêtes IA temporairement atteinte. Réessayez dans quelques secondes ou contactez-nous sur WhatsApp.",
+      retryable: true,
+    };
+  }
+  return {
+    status: 502,
+    code: "GEMINI_UPSTREAM_ERROR",
+    message: "Le service IA met du temps à répondre ou est momentanément perturbé. Réessayez dans un instant.",
+    retryable: true,
+  };
+}
+
+async function generateChatWithRetry(params: {
+  systemInstruction: string;
+  contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }>;
+}) {
+  if (!ai) throw new Error("Gemini client not initialized");
+
+  const runModel = async (modelName: string, useLowThinking: boolean) => {
+    const config: Record<string, any> = {
+      systemInstruction: params.systemInstruction,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          reply: {
+            type: Type.STRING,
+            description: "Réponse naturelle, concise et professionnelle en français (Markdown léger autorisé avec **gras** et puces •).",
+          },
+          suggestedTab: {
+            type: Type.STRING,
+            enum: ["home", "about", "shop", "activities", "events", "campus", "service", "esport", "none"],
+            description: "ID d'onglet recommandé parmi home, about, shop, activities, events, campus, service, esport, ou 'none' si aucun.",
+          },
+          unanswered: {
+            type: Type.BOOLEAN,
+            description: "true si la réponse réelle manque dans la base de connaissances officielle.",
+          },
+          needsWhatsappHandoff: {
+            type: Type.BOOLEAN,
+            description: "true si une assistance humaine via WhatsApp est recommandée.",
+          },
+        },
+        required: ["reply", "suggestedTab", "unanswered", "needsWhatsappHandoff"],
+      },
+    };
+    if (useLowThinking) {
+      config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+    }
+
+    return ai.models.generateContent({
+      model: modelName,
+      contents: params.contents,
+      config,
+    });
+  };
+
+  try {
+    return await runModel("gemini-4-hydrogen", true);
+  } catch (firstErr: any) {
+    const classified = classifyGeminiError(firstErr);
+    console.warn(`[HOUSE GAME AI] Premier essai gemini-4-hydrogen échoué (${classified.code}):`, firstErr?.message);
+    if (!classified.retryable) throw firstErr;
+    await new Promise((r) => setTimeout(r, 500));
+    try {
+      return await runModel("gemini-3.1-flash-lite", false);
+    } catch (secondErr) {
+      console.warn("[HOUSE GAME AI] Second essai gemini-3.1-flash-lite échoué:", secondErr);
+      throw firstErr;
+    }
+  }
 }
 
 async function runHouseGameAiChat(params: {
@@ -469,67 +631,19 @@ RÈGLES STRICTES ANTI-HALLUCINATION (OBLIGATOIRES) :
 1. Utilise EXCLUSIVEMENT les données factuelles ci-dessous issues de la base officielle HOUSE GAME en temps réel.
 2. N'INVENTE JAMAIS de prix, de produit, de stock, d'horaire, de promotion, de tournoi, de date ou de téléphone absent du contexte.
 3. Si une information précise demandée par l'utilisateur n'est PAS dans la base ci-dessous, indique honnêtement qu'elle n'est pas encore renseignée sur le site, mets "unanswered": true et "needsWhatsappHandoff": true, et invite chaleureusement à contacter l'équipe sur WhatsApp (${snapshot.shopInfo.whatsapp}).
-4. Sois concis, structuré (puces courtes si utile), sans blabla inutile, et propose la rubrique la plus pertinente dans "suggestedTab" (ou null si aucune).
+4. Sois concis, structuré (puces courtes si utile), sans blabla inutile, et propose la rubrique la plus pertinente dans "suggestedTab" (ou "none" si aucune).
 
 BASE DE CONNAISSANCES OFFICIELLE EN TEMPS RÉEL :
 ${snapshot.contextText}`;
 
-  const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
+  const contents = sanitizeChatContents(params.history, params.message, params.currentTab || "home");
 
-  if (Array.isArray(params.history)) {
-    const recent = params.history.slice(-8);
-    for (const item of recent) {
-      if (!item?.text) continue;
-      contents.push({
-        role: item.sender === "user" ? "user" : "model",
-        parts: [{ text: String(item.text).slice(0, 1500) }],
-      });
-    }
-  }
-
-  contents.push({
-    role: "user",
-    parts: [
-      {
-        text: `[Onglet actuel du visiteur : "${params.currentTab || "home"}"]\nMessage : ${params.message}`,
-      },
-    ],
-  });
-
-  const response = await ai.models.generateContent({
-    model: "gemini-4-hydrogen",
+  const response = await generateChatWithRetry({
+    systemInstruction,
     contents,
-    config: {
-      systemInstruction,
-      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          reply: {
-            type: Type.STRING,
-            description: "Réponse naturelle, concise et professionnelle en français (format Markdown léger autorisé avec **gras** et puces •).",
-          },
-          suggestedTab: {
-            type: Type.STRING,
-            nullable: true,
-            description: "ID d'onglet recommandé parmi: home, about, shop, activities, events, campus, service, esport, ou null.",
-          },
-          unanswered: {
-            type: Type.BOOLEAN,
-            description: "true si la réponse réelle manque dans la base de connaissances officielle.",
-          },
-          needsWhatsappHandoff: {
-            type: Type.BOOLEAN,
-            description: "true si une assistance humaine via WhatsApp est recommandée.",
-          },
-        },
-        required: ["reply", "unanswered", "needsWhatsappHandoff"],
-      },
-    },
   });
 
-  const rawText = response.text || "{}";
+  const rawText = (response.text || "{}").trim();
   let parsed: {
     reply?: string;
     suggestedTab?: string | null;
@@ -540,12 +654,17 @@ ${snapshot.contextText}`;
   try {
     parsed = JSON.parse(rawText);
   } catch {
-    parsed = {
-      reply: rawText,
-      suggestedTab: null,
-      unanswered: false,
-      needsWhatsappHandoff: false,
-    };
+    const cleaned = rawText.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      parsed = {
+        reply: rawText,
+        suggestedTab: null,
+        unanswered: false,
+        needsWhatsappHandoff: false,
+      };
+    }
   }
 
   const validTabs = new Set(["home", "about", "shop", "activities", "events", "campus", "service", "esport"]);
@@ -616,9 +735,11 @@ app.post("/api/ai/chat", async (req: Request, res: Response) => {
 
     return res.status(result.status).json(result.body);
   } catch (error: any) {
+    const classified = classifyGeminiError(error);
     console.error("[HOUSE GAME AI] Chat error:", error);
-    return res.status(500).json({
-      error: "Erreur lors de la génération de la réponse IA",
+    return res.status(classified.status).json({
+      error: classified.message,
+      code: classified.code,
       details: error?.message || "Erreur inconnue",
     });
   }
@@ -968,6 +1089,12 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[HOUSE GAME] Serveur Full-Stack opérationnel sur http://0.0.0.0:${PORT}`);
+    // Pre-warm live knowledge cache on boot so first visitor chat is instant
+    setTimeout(() => {
+      buildLiveKnowledgeContext(true).catch((err) =>
+        console.warn("[HOUSE GAME AI] Initial warmup warning:", err)
+      );
+    }, 200);
   });
 }
 

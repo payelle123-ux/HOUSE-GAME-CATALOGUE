@@ -26,7 +26,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   enabled: true,
   assistantName: "HOUSE GAME AI",
   welcomeMessage:
-    "Bienvenue chez **HOUSE GAME** ! Je suis **HOUSE GAME AI**, ton assistant officiel.\n\nJe peux te renseigner sur nos consoles, accessoires, réparations, événements, tournois E-Sport, horaires ou t'aider à passer commande.\n\nComment puis-je t'aider aujourd'hui ?",
+    "Bienvenue sur le site officiel de **HOUSE GAME** ! Je suis **HOUSE GAME AI**, votre assistant virtuel dédié.\n\nVoici tout ce que vous pouvez découvrir sur notre plateforme :\n• **Boutique** : Consoles, manettes, jeux vidéo et accessoires gaming avec commande rapide WhatsApp\n• **HG Service** : Atelier de réparation express et maintenance consoles & manettes\n• **Nos Activités & HG Event** : Salles gaming next-gen, VR, soirées et événements officiels\n• **Arène E-Sport** : Tournois, inscriptions en ligne et classements automatiques\n• **HG Campus & Qui sommes-nous** : Formations numériques, nos espaces et notre équipe\n\nPosez-moi votre question ou cliquez sur une suggestion ci-dessous !",
   personalityTone: "dynamique_pro",
   fallbackWhatsappMessage:
     "Cette information précise n'est pas encore renseignée dans notre base officielle. Tu peux contacter directement notre équipe sur WhatsApp pour une réponse immédiate !",
@@ -427,27 +427,58 @@ export interface AiChatApiResponse {
   code?: string;
 }
 
+async function parseApiJsonResponse(res: Response, fallbackPrefix: string): Promise<any> {
+  const rawText = await res.text().catch(() => "");
+  let parsed: any = {};
+  if (rawText) {
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      parsed = {};
+    }
+  }
+  if (!res.ok) {
+    const serverMsg =
+      parsed?.error ||
+      (res.status === 504 || res.status === 502
+        ? "Le serveur IA a mis trop de temps à répondre. Réessayez dans un instant."
+        : res.status === 404
+        ? "Service IA introuvable sur le serveur (/api/ai/chat)."
+        : `${fallbackPrefix} (${res.status})`);
+    const err = new Error(serverMsg) as Error & {
+      code?: string;
+      status?: number;
+    };
+    err.code = parsed?.code;
+    err.status = res.status;
+    throw err;
+  }
+  return parsed;
+}
+
 export async function sendChatToAi(params: {
   message: string;
   history: Array<{ sender: "user" | "ai"; text: string }>;
   currentTab: NavTabId;
 }): Promise<AiChatApiResponse> {
-  const res = await fetch("/api/ai/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  const data = (await res.json().catch(() => ({}))) as AiChatApiResponse;
-  if (!res.ok) {
-    const err = new Error(data.error || `Erreur serveur IA (${res.status})`) as Error & {
-      code?: string;
-      status?: number;
-    };
-    err.code = data.code;
-    err.status = res.status;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 32000);
+  try {
+    const res = await fetch("/api/ai/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+      signal: controller.signal,
+    });
+    return (await parseApiJsonResponse(res, "Erreur serveur IA")) as AiChatApiResponse;
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new Error("La réponse de l'assistant IA prend plus de temps que prévu. Veuillez réessayer.");
+    }
     throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return data;
 }
 
 export async function generateMarketingCampaignAi(params: {
@@ -464,16 +495,24 @@ export async function generateMarketingCampaignAi(params: {
   hashtags: string[];
   linkedEntityLabel: string;
 }> {
-  const res = await fetch("/api/ai/marketing/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error || `Erreur génération marketing (${res.status})`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 32000);
+  try {
+    const res = await fetch("/api/ai/marketing/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+      signal: controller.signal,
+    });
+    return await parseApiJsonResponse(res, "Erreur génération marketing");
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new Error("Délai dépassé lors de la génération marketing. Veuillez réessayer.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return data;
 }
 
 export async function refreshServerAiKnowledge(): Promise<{

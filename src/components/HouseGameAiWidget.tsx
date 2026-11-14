@@ -17,6 +17,8 @@ import {
   AlertTriangle,
   Sparkles,
   CheckCircle2,
+  Play,
+  Square,
 } from "lucide-react";
 import aiAvatarUrl from "../assets/images/housegame_ai_avatar_1794584767963.jpg";
 import { sfx } from "../services/soundEffects";
@@ -83,6 +85,8 @@ const QUICK_PROMPTS = [
 
 const CONV_STORAGE_KEY = "hg_ai_session_conv_id";
 const VISITOR_LABEL_KEY = "hg_ai_visitor_label";
+const FIRST_VISIT_WELCOMED_KEY = "hg_ai_first_visit_welcomed_v1";
+const VOICE_PREF_KEY = "hg_ai_voice_enabled_v1";
 
 function createNewConversationId() {
   return `web_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -149,10 +153,19 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
-  const [speechEnabled, setSpeechEnabled] = useState(false);
+  const [speechEnabled, setSpeechEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(VOICE_PREF_KEY);
+      return saved === null ? true : saved === "true";
+    } catch {
+      return true;
+    }
+  });
+  const [voiceStatus, setVoiceStatus] = useState<"idle" | "speaking" | "blocked">("idle");
   const [isThinking, setIsThinking] = useState(false);
   const [inputText, setInputText] = useState("");
   const [apiErrorBanner, setApiErrorBanner] = useState<string | null>(null);
+  const [lastFailedQuery, setLastFailedQuery] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string>(() => getOrCreateConversationId());
   const [visitorLabel] = useState<string>(() => getVisitorLabel());
 
@@ -164,17 +177,168 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
     }
   });
 
+  const buildPresentationSpeech = () =>
+    `Bonjour et bienvenue chez ${shopInfo.name || "HOUSE GAME"} ! Je suis ${assistantName}, votre assistant virtuel officiel. ` +
+    `Sur notre site, vous pouvez découvrir notre Boutique de consoles, jeux vidéo et accessoires gaming, notre atelier de réparation HG Service, nos activités en salle et événements HG Event, notre campus de formation, ainsi que l'arène E-Sport avec nos tournois et classements en direct. ` +
+    `Posez-moi n'importe quelle question, je suis là pour vous guider !`;
+
+  const getEffectiveWelcomeText = () => {
+    const custom = (effectiveConfig.welcomeMessage || "").trim();
+    if (custom.length >= 160) return custom;
+    return DEFAULT_AI_CONFIG.welcomeMessage;
+  };
+
   const buildWelcomeMsg = (): AiChatMessage => ({
     id: "welcome-init",
     sender: "ai",
-    text: effectiveConfig.welcomeMessage || DEFAULT_AI_CONFIG.welcomeMessage,
+    text: getEffectiveWelcomeText(),
     timestamp: Date.now(),
     suggestedTab: null,
   });
 
   const [messages, setMessages] = useState<AiChatMessage[]>(() => [buildWelcomeMsg()]);
   const hydratedConvRef = useRef<string | null>(null);
+  const firstVisitTriggeredRef = useRef(false);
+  const pendingGestureUnlockRef = useRef<(() => void) | null>(null);
+  const speechTokenRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const stopSpeech = () => {
+    speechTokenRef.current += 1;
+    if (pendingGestureUnlockRef.current) {
+      window.removeEventListener("pointerdown", pendingGestureUnlockRef.current, true);
+      window.removeEventListener("keydown", pendingGestureUnlockRef.current, true);
+      pendingGestureUnlockRef.current = null;
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+    setVoiceStatus("idle");
+  };
+
+  const pickFrenchVoice = (): SpeechSynthesisVoice | null => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+    const voices = window.speechSynthesis.getVoices() || [];
+    if (voices.length === 0) return null;
+    const frVoices = voices.filter((v) => v.lang.toLowerCase().startsWith("fr"));
+    if (frVoices.length === 0) return null;
+    return (
+      frVoices.find((v) => /google|natural|denise|henri|thomas|amelie|julie|paul/i.test(v.name)) ||
+      frVoices.find((v) => v.lang.toLowerCase() === "fr-fr") ||
+      frVoices[0]
+    );
+  };
+
+  const speakText = (rawText: string, options?: { force?: boolean; registerGestureFallback?: boolean }) => {
+    const allowed = options?.force || speechEnabled;
+    if (!allowed || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const clean = rawText
+      .replace(/[*_#`[\]()•]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 750);
+    if (!clean) return;
+
+    // Split into short sentences to avoid Chrome Web Speech 15s cutoff bug
+    const rawChunks = clean
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const chunks: string[] = [];
+    for (const part of rawChunks) {
+      if (part.length <= 165) {
+        chunks.push(part);
+      } else {
+        const sub = part.match(/.{1,160}(\s|$)/g) || [part];
+        chunks.push(...sub.map((s) => s.trim()).filter(Boolean));
+      }
+    }
+    if (chunks.length === 0) return;
+
+    const token = ++speechTokenRef.current;
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
+
+    const voice = pickFrenchVoice();
+    let started = false;
+
+    const attachGestureFallback = () => {
+      if (!options?.registerGestureFallback || pendingGestureUnlockRef.current) return;
+      const unlockHandler = () => {
+        if (pendingGestureUnlockRef.current) {
+          window.removeEventListener("pointerdown", pendingGestureUnlockRef.current, true);
+          window.removeEventListener("keydown", pendingGestureUnlockRef.current, true);
+          pendingGestureUnlockRef.current = null;
+        }
+        speakText(rawText, { force: true, registerGestureFallback: false });
+      };
+      pendingGestureUnlockRef.current = unlockHandler;
+      window.addEventListener("pointerdown", unlockHandler, { once: true, capture: true });
+      window.addEventListener("keydown", unlockHandler, { once: true, capture: true });
+    };
+
+    const speakChunkAt = (index: number) => {
+      if (speechTokenRef.current !== token) return;
+      if (index >= chunks.length) {
+        setVoiceStatus("idle");
+        return;
+      }
+      const utter = new SpeechSynthesisUtterance(chunks[index]);
+      utter.lang = "fr-FR";
+      utter.rate = 1.03;
+      utter.pitch = 1.0;
+      if (voice) utter.voice = voice;
+
+      utter.onstart = () => {
+        if (speechTokenRef.current !== token) return;
+        started = true;
+        setVoiceStatus("speaking");
+      };
+      utter.onend = () => {
+        if (speechTokenRef.current !== token) return;
+        speakChunkAt(index + 1);
+      };
+      utter.onerror = (ev: any) => {
+        if (speechTokenRef.current !== token) return;
+        const reason = String(ev?.error || "");
+        if (reason === "not-allowed" || reason === "audio-busy") {
+          setVoiceStatus("blocked");
+          attachGestureFallback();
+        } else {
+          setVoiceStatus("idle");
+        }
+      };
+
+      try {
+        window.speechSynthesis.speak(utter);
+      } catch {
+        setVoiceStatus("blocked");
+        attachGestureFallback();
+      }
+    };
+
+    speakChunkAt(0);
+
+    // Detect silent browser autoplay block (common on first load before any click)
+    setTimeout(() => {
+      if (speechTokenRef.current !== token) return;
+      if (!started && !window.speechSynthesis.speaking) {
+        setVoiceStatus("blocked");
+        attachGestureFallback();
+      }
+    }, 650);
+  };
+
+  // Cleanup speech on unmount
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+    };
+  }, []);
 
   // Hydrate persistent conversation history from Firestore once loaded
   useEffect(() => {
@@ -190,11 +354,66 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
   useEffect(() => {
     setMessages((prev) => {
       if (prev.length === 1 && prev[0].id.startsWith("welcome")) {
-        return [{ ...prev[0], text: effectiveConfig.welcomeMessage || DEFAULT_AI_CONFIG.welcomeMessage }];
+        return [{ ...prev[0], text: getEffectiveWelcomeText() }];
       }
       return prev;
     });
   }, [effectiveConfig.welcomeMessage]);
+
+  // First-visit automatic presentation + spoken welcome once PageLoader finishes
+  useEffect(() => {
+    if (!effectiveConfig.enabled || firstVisitTriggeredRef.current) return;
+    if (currentTab === "ai-center") return;
+
+    let alreadyWelcomed = false;
+    try {
+      alreadyWelcomed = localStorage.getItem(FIRST_VISIT_WELCOMED_KEY) === "true";
+    } catch {}
+    if (alreadyWelcomed) return;
+
+    firstVisitTriggeredRef.current = true;
+    let cancelled = false;
+    let pollCount = 0;
+
+    const triggerFirstVisitWelcome = () => {
+      if (cancelled) return;
+      try {
+        localStorage.setItem(FIRST_VISIT_WELCOMED_KEY, "true");
+        sessionStorage.setItem("hg_ai_teaser_dismissed", "true");
+      } catch {}
+      setShowTeaser(false);
+      setIsOpen(true);
+      setIsMinimized(false);
+      setSpeechEnabled(true);
+      try {
+        localStorage.setItem(VOICE_PREF_KEY, "true");
+      } catch {}
+      speakText(buildPresentationSpeech(), { force: true, registerGestureFallback: true });
+    };
+
+    const waitForBootLoader = () => {
+      if (cancelled) return;
+      pollCount += 1;
+      let bootDone = false;
+      try {
+        bootDone = sessionStorage.getItem("hg_boot_shown") === "true";
+      } catch {
+        bootDone = true;
+      }
+
+      if (bootDone || pollCount >= 10) {
+        setTimeout(triggerFirstVisitWelcome, 500);
+      } else {
+        setTimeout(waitForBootLoader, 250);
+      }
+    };
+
+    const startTimer = setTimeout(waitForBootLoader, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(startTimer);
+    };
+  }, [effectiveConfig.enabled, currentTab]);
 
   // Auto-dismiss teaser after 9s and never overlay E-sport registration forms
   useEffect(() => {
@@ -232,18 +451,6 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
     }
   }, [messages, isThinking, isOpen, isMinimized]);
 
-  const speakText = (text: string) => {
-    if (!speechEnabled || typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const clean = text.replace(/[*_#`[\]()]/g, " ").slice(0, 260);
-      const utter = new SpeechSynthesisUtterance(clean);
-      utter.lang = "fr-FR";
-      utter.rate = 1.04;
-      window.speechSynthesis.speak(utter);
-    } catch {}
-  };
-
   const persistConversation = async (
     nextMessages: AiChatMessage[],
     options?: { status?: "active" | "transferred" | "resolved"; extraUnansweredQuestion?: string }
@@ -277,13 +484,22 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
     }
   };
 
-  const handleSendMessage = async (textOverride?: string) => {
+  const handleSendMessage = async (textOverride?: string, options?: { skipUserAppend?: boolean }) => {
     const query = (textOverride ?? inputText).trim();
     if (!query || isThinking) return;
 
     sfx.playClick();
-    setInputText("");
+    if (!options?.skipUserAppend) {
+      setInputText("");
+    }
     setApiErrorBanner(null);
+    setLastFailedQuery(null);
+
+    // Exclude synthetic welcome bubble and do NOT include the current user prompt in history
+    const priorHistory = messages
+      .filter((m) => !m.id.startsWith("welcome"))
+      .slice(-8)
+      .map((m) => ({ sender: m.sender, text: m.text }));
 
     const userMsg: AiChatMessage = {
       id: `usr_${Date.now()}`,
@@ -292,14 +508,16 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
       timestamp: Date.now(),
     };
 
-    const withUser = [...messages, userMsg];
-    setMessages(withUser);
+    const withUser = options?.skipUserAppend ? messages : [...messages, userMsg];
+    if (!options?.skipUserAppend) {
+      setMessages(withUser);
+    }
     setIsThinking(true);
 
     try {
       const result = await sendChatToAi({
         message: query,
-        history: withUser.slice(-8).map((m) => ({ sender: m.sender, text: m.text })),
+        history: priorHistory,
         currentTab,
       });
 
@@ -325,8 +543,9 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
     } catch (err: any) {
       const errorMsgText =
         err?.message ||
-        "L'assistant IA est momentanément indisponible. Vous pouvez contacter notre équipe directement sur WhatsApp.";
+        "L'assistant IA est momentanément indisponible. Vous pouvez réessayer ou contacter notre équipe sur WhatsApp.";
       setApiErrorBanner(errorMsgText);
+      setLastFailedQuery(query);
       await persistConversation(withUser, { extraUnansweredQuestion: query });
     } finally {
       setIsThinking(false);
@@ -349,6 +568,7 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
 
   const handleResetChat = () => {
     sfx.playClick();
+    stopSpeech();
     const freshId = createNewConversationId();
     try {
       localStorage.setItem(CONV_STORAGE_KEY, freshId);
@@ -356,6 +576,7 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
     hydratedConvRef.current = freshId;
     setConversationId(freshId);
     setApiErrorBanner(null);
+    setLastFailedQuery(null);
     setMessages([buildWelcomeMsg()]);
   };
 
@@ -492,7 +713,16 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
               <button
                 onClick={() => {
                   sfx.playClick();
-                  setSpeechEnabled((v) => !v);
+                  setSpeechEnabled((v) => {
+                    const next = !v;
+                    try {
+                      localStorage.setItem(VOICE_PREF_KEY, String(next));
+                    } catch {}
+                    if (!next) {
+                      stopSpeech();
+                    }
+                    return next;
+                  });
                 }}
                 className={`rounded-lg p-1.5 transition ${
                   speechEnabled
@@ -520,6 +750,7 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
               <button
                 onClick={() => {
                   sfx.playClick();
+                  stopSpeech();
                   setIsOpen(false);
                 }}
                 className="rounded-lg p-1.5 text-slate-400 hover:bg-red-500/20 hover:text-red-400"
@@ -533,6 +764,42 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
           {/* Body */}
           {!isMinimized && (
             <div className="flex flex-1 flex-col overflow-hidden bg-[#07090E]">
+              {/* Voice Status / Autoplay Fallback Bar */}
+              {effectiveConfig.enabled && voiceStatus === "speaking" && (
+                <div className="flex items-center justify-between gap-2 border-b border-[#3E9BFF]/30 bg-[#3E9BFF]/10 px-3.5 py-2 text-[11px] font-['JetBrains_Mono'] text-[#93C5FD]">
+                  <span className="flex items-center gap-2">
+                    <Volume2 className="h-3.5 w-3.5 animate-pulse text-[#3E9BFF]" />
+                    <span>{assistantName} vous présente HOUSE GAME...</span>
+                  </span>
+                  <button
+                    onClick={stopSpeech}
+                    className="inline-flex items-center gap-1 rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-white/20"
+                  >
+                    <Square className="h-2.5 w-2.5" />
+                    <span>Arrêter</span>
+                  </button>
+                </div>
+              )}
+
+              {effectiveConfig.enabled && voiceStatus === "blocked" && (
+                <div className="flex items-center justify-between gap-2 border-b border-[#3E9BFF]/35 bg-[#3E9BFF]/15 px-3.5 py-2 text-[11px] font-['Chakra_Petch'] text-white">
+                  <span className="text-[#D6DCE6]">
+                    Cliquez pour écouter la présentation vocale de <strong className="text-white">{assistantName}</strong>
+                  </span>
+                  <button
+                    onClick={() => {
+                      sfx.playClick();
+                      setSpeechEnabled(true);
+                      speakText(buildPresentationSpeech(), { force: true, registerGestureFallback: false });
+                    }}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#3E9BFF] px-2.5 py-1 font-['JetBrains_Mono'] text-[10px] font-bold text-white shadow-sm hover:bg-[#5dadff]"
+                  >
+                    <Play className="h-3 w-3" />
+                    <span>Écouter</span>
+                  </button>
+                </div>
+              )}
+
               {/* Disabled Notice */}
               {!effectiveConfig.enabled && (
                 <div className="border-b border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-200 flex items-center justify-between gap-2">
@@ -576,8 +843,38 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
                           {renderSafeFormattedLines(msg.text)}
                         </div>
 
-                        {(msg.suggestedTab || msg.needsWhatsappHandoff || msg.unanswered) && (
+                        {(msg.id.startsWith("welcome") || msg.suggestedTab || msg.needsWhatsappHandoff || msg.unanswered) && (
                           <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-white/10 pt-2.5">
+                            {msg.id.startsWith("welcome") && (
+                              <button
+                                onClick={() => {
+                                  sfx.playClick();
+                                  if (voiceStatus === "speaking") {
+                                    stopSpeech();
+                                  } else {
+                                    setSpeechEnabled(true);
+                                    try {
+                                      localStorage.setItem(VOICE_PREF_KEY, "true");
+                                    } catch {}
+                                    speakText(buildPresentationSpeech(), { force: true });
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-[#3E9BFF]/50 bg-[#3E9BFF]/15 px-2.5 py-1 font-['JetBrains_Mono'] text-[11px] font-bold text-[#3E9BFF] transition hover:bg-[#3E9BFF] hover:text-white"
+                              >
+                                {voiceStatus === "speaking" ? (
+                                  <>
+                                    <Square className="h-3 w-3" />
+                                    <span>Arrêter la voix</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Volume2 className="h-3 w-3" />
+                                    <span>Présentation vocale</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+
                             {msg.suggestedTab && (
                               <button
                                 onClick={() => {
@@ -622,13 +919,24 @@ export const HouseGameAiWidget: React.FC<HouseGameAiWidgetProps> = ({
                       <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
                       <p>{apiErrorBanner}</p>
                     </div>
-                    <button
-                      onClick={() => handleWhatsappHandoff()}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 font-['JetBrains_Mono'] text-[11px] font-bold text-white hover:bg-emerald-500"
-                    >
-                      <MessageCircle className="h-3.5 w-3.5" />
-                      <span>Contacter l'équipe sur WhatsApp</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {lastFailedQuery && (
+                        <button
+                          onClick={() => handleSendMessage(lastFailedQuery, { skipUserAppend: true })}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#3E9BFF]/50 bg-[#3E9BFF]/20 px-3 py-1.5 font-['JetBrains_Mono'] text-[11px] font-bold text-[#93C5FD] hover:bg-[#3E9BFF] hover:text-white"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span>Réessayer</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleWhatsappHandoff()}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 font-['JetBrains_Mono'] text-[11px] font-bold text-white hover:bg-emerald-500"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        <span>Contacter l'équipe sur WhatsApp</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
