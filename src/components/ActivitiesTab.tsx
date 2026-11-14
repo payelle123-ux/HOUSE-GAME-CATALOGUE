@@ -28,7 +28,6 @@ import {
   Layers,
   Sparkles,
   Users,
-  Lock,
   Plus,
   Pencil,
   Trash2,
@@ -105,7 +104,7 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
   onUpdateActivities,
   activitiesBanner: controlledBanner,
   onUpdateActivitiesBanner,
-  onOpenLogin,
+  onOpenLogin: _onOpenLogin,
   onNavigateTab,
 }) => {
   // If controlled prop is passed, use it; otherwise fallback to local initial state
@@ -488,9 +487,9 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
           </div>
         </div>
 
-        {/* Espace Pro Action Bar inside Banner */}
-        <div className="relative z-10 mt-6 pt-5 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
-          {isAdmin ? (
+        {/* Espace Pro Action Bar inside Banner (Admin Only) */}
+        {isAdmin && (
+          <div className="relative z-10 mt-6 pt-5 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
               {/* Bouton direct pour Modifier les textes de la bannière */}
               <button
@@ -520,26 +519,13 @@ export const ActivitiesTab: React.FC<ActivitiesTabProps> = ({
                 <span>Rétablir les 17 activités d'origine</span>
               </button>
             </div>
-          ) : (
-            onOpenLogin && (
-              <button
-                id="btn-pro-login-activities"
-                onClick={onOpenLogin}
-                className="inline-flex items-center gap-2 rounded-xl border border-[#3E9BFF]/30 bg-[#3E9BFF]/10 hover:bg-[#3E9BFF]/20 px-3.5 py-2 font-['JetBrains_Mono'] text-xs text-[#3E9BFF] transition"
-              >
-                <Lock size={13} />
-                <span>Espace Pro : Entrer le code pour modifier les activités & la bannière</span>
-              </button>
-            )
-          )}
 
-          {isAdmin && (
             <span className="text-[11px] font-['JetBrains_Mono'] text-emerald-400 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
               <span>Modifications synchronisées en temps réel</span>
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Bloc À Propos de House Game */}

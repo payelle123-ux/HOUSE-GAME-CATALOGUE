@@ -232,28 +232,36 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>(() => loadProducts());
   const [shopInfo, setShopInfo] = useState<ShopInfo>(() => loadShopInfo());
   const [cart, setCart] = useState<CartItem[]>(() => loadCart());
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    try {
-      return (
-        sessionStorage.getItem("hg_is_admin") === "true" ||
-        localStorage.getItem("hg_is_admin") === "true"
-      );
-    } catch {
-      return false;
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const isAdminRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    isAdminRef.current = isAdmin;
+    if (!isAdmin) {
+      setNewRegAlert(null);
     }
-  });
-  const handleSetIsAdmin = useCallback((val: boolean) => {
-    setIsAdmin(val);
+  }, [isAdmin]);
+
+  // Clear any legacy persisted admin flags so entering the site never auto-activates admin mode
+  useEffect(() => {
     try {
-      if (val) {
-        sessionStorage.setItem("hg_is_admin", "true");
-        sessionStorage.setItem("hg_esport_admin_unlocked", "true");
-        localStorage.setItem("hg_is_admin", "true");
-      } else {
-        sessionStorage.removeItem("hg_is_admin");
-        sessionStorage.removeItem("hg_esport_admin_unlocked");
-        localStorage.removeItem("hg_is_admin");
-      }
+      sessionStorage.removeItem("hg_is_admin");
+      sessionStorage.removeItem("hg_esport_admin_unlocked");
+      localStorage.removeItem("hg_is_admin");
+    } catch {}
+  }, []);
+
+  const handleSetIsAdmin = useCallback((val: boolean) => {
+    isAdminRef.current = val;
+    setIsAdmin(val);
+    if (!val) {
+      setNewRegAlert(null);
+      setActiveTab((prev) => (prev === "ai-center" ? "home" : prev));
+    }
+    try {
+      sessionStorage.removeItem("hg_is_admin");
+      sessionStorage.removeItem("hg_esport_admin_unlocked");
+      localStorage.removeItem("hg_is_admin");
     } catch {}
   }, []);
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(true);
@@ -453,7 +461,7 @@ export default function App() {
       (liveRegs) => {
         if (!isInitialMountRef.current) {
           const incoming = liveRegs.find((r) => !knownRegIdsRef.current.has(r.id));
-          if (incoming) {
+          if (incoming && isAdminRef.current) {
             sfx.playRegistrationAlert();
             setNewRegAlert(incoming);
             if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
@@ -486,8 +494,10 @@ export default function App() {
         bc.onmessage = (event) => {
           if (event.data?.type === "new-registration" && event.data?.payload) {
             const incoming = event.data.payload as EsportRegistration;
-            sfx.playRegistrationAlert();
-            setNewRegAlert(incoming);
+            if (isAdminRef.current) {
+              sfx.playRegistrationAlert();
+              setNewRegAlert(incoming);
+            }
             setEsportRegistrations((prev) => {
               if (prev.some((r) => r.id === incoming.id)) return prev;
               const updated = [incoming, ...prev];
@@ -510,8 +520,10 @@ export default function App() {
       const customEvent = e as CustomEvent<EsportRegistration>;
       if (customEvent.detail) {
         const incoming = customEvent.detail;
-        sfx.playRegistrationAlert();
-        setNewRegAlert(incoming);
+        if (isAdminRef.current) {
+          sfx.playRegistrationAlert();
+          setNewRegAlert(incoming);
+        }
         setEsportRegistrations((prev) => {
           if (prev.some((r) => r.id === incoming.id)) return prev;
           const updated = [incoming, ...prev];
@@ -527,8 +539,10 @@ export default function App() {
         const { type, payload } = customEvent.detail;
         if (type === "new-registration" && payload) {
           const incoming = payload as EsportRegistration;
-          sfx.playRegistrationAlert();
-          setNewRegAlert(incoming);
+          if (isAdminRef.current) {
+            sfx.playRegistrationAlert();
+            setNewRegAlert(incoming);
+          }
           setEsportRegistrations((prev) => {
             if (prev.some((r) => r.id === incoming.id)) return prev;
             const updated = [incoming, ...prev];
@@ -1248,7 +1262,7 @@ export default function App() {
         onSelectTab={(tabId) => setActiveTab(tabId)}
         customTabs={customTabs}
         isAdmin={isAdmin}
-        pendingEsportCount={esportRegistrations.filter((r) => r.status === "en attente").length}
+        pendingEsportCount={isAdmin ? esportRegistrations.filter((r) => r.status === "en attente").length : 0}
         onOpenCreateTabModal={() => {
           setEditingCustomTab(null);
           setIsCustomTabModalOpen(true);
@@ -1931,8 +1945,8 @@ export default function App() {
         isAdmin={isAdmin}
       />
 
-      {/* Real-time Notification Alert for New E-Sport Registrations */}
-      {newRegAlert && (
+      {/* Real-time Notification Alert for New E-Sport Registrations (Admin Only) */}
+      {isAdmin && newRegAlert && (
         <div className="fixed bottom-6 right-6 z-50 flex max-w-md items-center gap-3.5 rounded-2xl border-2 border-emerald-400 bg-[#0E1524] p-4 shadow-[0_10px_35px_rgba(0,255,136,0.4)] backdrop-blur-xl animate-fadeIn">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-inner">
             <BellRing size={22} className="animate-pulse" />

@@ -152,26 +152,13 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     }
   }, [initialSubView]);
 
-  // Admin Security Access Gate
-  const [isEsportAdminUnlocked, setIsEsportAdminUnlocked] = useState<boolean>(() => {
-    try {
-      return (
-        isAdmin ||
-        sessionStorage.getItem("hg_is_admin") === "true" ||
-        sessionStorage.getItem("hg_esport_admin_unlocked") === "true" ||
-        localStorage.getItem("hg_is_admin") === "true"
-      );
-    } catch {
-      return false;
-    }
-  });
+  // Admin Security Access Gate (never auto-unlocked from storage on site entry)
+  const [isEsportAdminUnlocked, setIsEsportAdminUnlocked] = useState<boolean>(isAdmin);
   const hasAdminAccess = isAdmin || isEsportAdminUnlocked;
 
-  // Sync state if global admin status changes
+  // Sync state whenever global admin status changes
   useEffect(() => {
-    if (isAdmin) {
-      setIsEsportAdminUnlocked(true);
-    }
+    setIsEsportAdminUnlocked(isAdmin);
   }, [isAdmin]);
 
   // Admin PIN Gate Form State
@@ -1572,11 +1559,6 @@ export const EsportTab: React.FC<EsportTabProps> = ({
     if (entered === expected || entered === "4826") {
       sfx.playSuccess();
       setIsEsportAdminUnlocked(true);
-      try {
-        sessionStorage.setItem("hg_esport_admin_unlocked", "true");
-        sessionStorage.setItem("hg_is_admin", "true");
-        localStorage.setItem("hg_is_admin", "true");
-      } catch {}
       onUnlockAdmin?.();
       setAdminPinError(null);
       setAdminPinInput("");
@@ -1648,7 +1630,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
             id: "admin-dash",
             label: hasAdminAccess ? "Gestion E-Sport (Admin)" : "Gestion E-Sport (Verrouillé)",
             icon: hasAdminAccess ? ShieldCheck : Lock,
-            count: registrations.filter((r) => r.status === "en attente").length,
+            count: hasAdminAccess ? registrations.filter((r) => r.status === "en attente").length : undefined,
           },
         ].map((item) => {
           const Icon = item.icon;
@@ -2183,7 +2165,7 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                   key={lic.id}
                   license={lic}
                   customLogoUrl={bannerConfig.logoUrl}
-                  onDelete={() => handleRequestDeleteLicense(lic)}
+                  onDelete={hasAdminAccess ? () => handleRequestDeleteLicense(lic) : undefined}
                   onVerifyClick={() => {
                     setVerificationQuery(lic.id);
                     const res = verifyEsportLicense(lic.id, licenses);

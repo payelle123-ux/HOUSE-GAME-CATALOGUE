@@ -22,7 +22,6 @@ import {
   RotateCcw,
   Camera,
   ZoomIn,
-  Lock,
   Check,
   Tag,
   Share2,
@@ -48,7 +47,7 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
   shopInfo,
   isAdmin,
   onUpdateEvents,
-  onOpenLogin,
+  onOpenLogin: _onOpenLogin,
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<string>("all");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -424,9 +423,9 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
           </p>
         </div>
 
-        {/* Espace Pro Direct Action Bar inside Banner */}
-        <div className="mt-6 pt-5 border-t border-purple-500/20 flex flex-wrap items-center justify-between gap-3">
-          {isAdmin ? (
+        {/* Espace Pro Direct Action Bar inside Banner (Admin Only) */}
+        {isAdmin && (
+          <div className="mt-6 pt-5 border-t border-purple-500/20 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
               <button
                 onClick={handleOpenAdd}
@@ -444,25 +443,13 @@ export const HgEventTab: React.FC<HgEventTabProps> = ({
                 <span>Rétablir les 6 concepts d'origine</span>
               </button>
             </div>
-          ) : (
-            onOpenLogin && (
-              <button
-                onClick={onOpenLogin}
-                className="inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 px-3.5 py-2 font-['JetBrains_Mono'] text-xs text-purple-300 transition"
-              >
-                <Lock size={13} />
-                <span>Espace Pro : Entrer le code pour modifier les événements HG</span>
-              </button>
-            )
-          )}
 
-          {isAdmin && (
             <span className="text-[11px] font-['JetBrains_Mono'] text-emerald-400 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
               <span>Modifications synchronisées en temps réel</span>
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Navigation / Filter Pills for the 6 Concepts */}
