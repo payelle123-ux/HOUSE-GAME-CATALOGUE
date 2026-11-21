@@ -2378,9 +2378,9 @@ export const EsportTab: React.FC<EsportTabProps> = ({
                             {entry.points !== undefined && (
                               <span className="text-amber-300 font-bold">{entry.points} pts</span>
                             )}
-                            {(entry.wins !== undefined || entry.losses !== undefined) && (
+                            {(entry.wins !== undefined || entry.draws !== undefined || entry.losses !== undefined) && (
                               <span className="text-slate-300">
-                                {entry.matchesPlayed ?? ((entry.wins ?? 0) + (entry.losses ?? 0))}M ({entry.wins ?? 0}V / {entry.losses ?? 0}D)
+                                {entry.matchesPlayed ?? ((entry.wins ?? 0) + (entry.draws ?? 0) + (entry.losses ?? 0))}M ({entry.wins ?? 0}V / {entry.draws ?? 0}N / {entry.losses ?? 0}D)
                               </span>
                             )}
                             {entry.reward && (

@@ -30,6 +30,7 @@ import {
   Filter,
   Award,
   RefreshCw,
+  Equal,
 } from "lucide-react";
 import {
   DEFAULT_SCORING_RULE,
@@ -178,6 +179,7 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
 
   // Scoring Rule Form State
   const [winPointsInput, setWinPointsInput] = useState<string>(String(DEFAULT_SCORING_RULE.winPoints));
+  const [drawPointsInput, setDrawPointsInput] = useState<string>(String(DEFAULT_SCORING_RULE.drawPoints));
   const [lossPointsInput, setLossPointsInput] = useState<string>(String(DEFAULT_SCORING_RULE.lossPoints));
 
   // Quick Result Recording Form State
@@ -203,7 +205,7 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
   // Match History Filter & Inline Edit/Delete State
   const [historyPlayerFilter, setHistoryPlayerFilter] = useState<string>("Tous");
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [editOutcome, setEditOutcome] = useState<"win" | "loss">("win");
+  const [editOutcome, setEditOutcome] = useState<"win" | "draw" | "loss">("win");
   const [editPlayerScore, setEditPlayerScore] = useState<string>("");
   const [editOpponentScore, setEditOpponentScore] = useState<string>("");
   const [editOpponentTag, setEditOpponentTag] = useState<string>("");
@@ -217,9 +219,16 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
   // Sync inputs when switching competition
   useEffect(() => {
     setWinPointsInput(String(activeRule.winPoints));
+    setDrawPointsInput(String(activeRule.drawPoints));
     setLossPointsInput(String(activeRule.lossPoints));
     setCompetitionNote(activeRankingRaw?.notes || "");
-  }, [activeTournament?.id, activeRule.winPoints, activeRule.lossPoints, activeRankingRaw?.notes]);
+  }, [
+    activeTournament?.id,
+    activeRule.winPoints,
+    activeRule.drawPoints,
+    activeRule.lossPoints,
+    activeRankingRaw?.notes,
+  ]);
 
   useEffect(() => {
     setSelectedRegId("");
@@ -248,8 +257,9 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
     if (!activeTournament || isSaving) return;
 
     const winPts = Number(winPointsInput);
+    const drawPts = Number(drawPointsInput);
     const lossPts = Number(lossPointsInput);
-    if (!Number.isFinite(winPts) || !Number.isFinite(lossPts)) {
+    if (!Number.isFinite(winPts) || !Number.isFinite(drawPts) || !Number.isFinite(lossPts)) {
       sfx.playError();
       onToast("Veuillez saisir des valeurs numériques valides pour le barème.");
       return;
@@ -260,6 +270,7 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
       const base = getWorkingBase();
       const updated = recomputeCompetitionRanking(base, {
         winPoints: winPts,
+        drawPoints: drawPts,
         lossPoints: lossPts,
       });
       await onSaveRanking(updated);
@@ -270,12 +281,12 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
         actor: "Direction Esport HG",
         targetId: activeTournament.id,
         targetType: "tournoi",
-        details: `Barème « ${activeTournament.title} » configuré : Victoire = ${winPts} pts, Défaite = ${lossPts} pt(s). Classement recalculé.`,
+        details: `Barème « ${activeTournament.title} » configuré : Victoire = ${winPts} pts, Nul = ${drawPts} pt(s), Défaite = ${lossPts} pt(s). Classement recalculé.`,
         timestamp: Date.now(),
       });
 
       sfx.playSuccess();
-      onToast(`Barème appliqué (${winPts}V / ${lossPts}D) et classement recalculé !`);
+      onToast(`Barème appliqué (${winPts}V / ${drawPts}N / ${lossPts}D) et classement recalculé !`);
     } finally {
       setIsSaving(false);
     }
@@ -302,14 +313,14 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
 
       await onSaveRanking(ranking);
       sfx.playSuccess();
-      onToast(`${addedCount} joueur${addedCount > 1 ? "s" : ""} inscrit${addedCount > 1 ? "s" : ""} chargé${addedCount > 1 ? "s" : ""} (0V / 0D) !`);
+      onToast(`${addedCount} joueur${addedCount > 1 ? "s" : ""} inscrit${addedCount > 1 ? "s" : ""} chargé${addedCount > 1 ? "s" : ""} (0V / 0N / 0D) !`);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // 3. Record Win / Loss from Form
-  const handleRecordResult = async (outcome: "win" | "loss") => {
+  // 3. Record Win / Draw / Loss from Form
+  const handleRecordResult = async (outcome: "win" | "draw" | "loss") => {
     if (!activeTournament || isSaving) return;
 
     const reg = tournamentPlayers.find((r) => r.id === selectedRegId);
@@ -371,7 +382,15 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
       const updatedEntry = updated.entries.find(
         (e) => e.gamerTag.trim().toLowerCase() === gamerTag.toLowerCase()
       );
-      const ptsAdded = outcome === "win" ? updated.scoringRule?.winPoints ?? 3 : updated.scoringRule?.lossPoints ?? 0;
+      const ptsAdded =
+        outcome === "win"
+          ? updated.scoringRule?.winPoints ?? DEFAULT_SCORING_RULE.winPoints
+          : outcome === "draw"
+          ? updated.scoringRule?.drawPoints ?? DEFAULT_SCORING_RULE.drawPoints
+          : updated.scoringRule?.lossPoints ?? DEFAULT_SCORING_RULE.lossPoints;
+
+      const outcomeLabel =
+        outcome === "win" ? "Victoire" : outcome === "draw" ? "Match nul" : "Défaite";
 
       sfx.playSuccess();
       setPlayerScoreInput("");
@@ -379,15 +398,15 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
       setOpponentTag("");
 
       onToast(
-        `${outcome === "win" ? "Victoire" : "Défaite"} enregistrée pour ${gamerTag} (${ptsAdded >= 0 ? `+${ptsAdded}` : ptsAdded} pts) — Rang actuel : #${updatedEntry?.position ?? "-"} !`
+        `${outcomeLabel} enregistré${outcome === "draw" ? "" : "e"} pour ${gamerTag} (${ptsAdded >= 0 ? `+${ptsAdded}` : ptsAdded} pts) — Rang actuel : #${updatedEntry?.position ?? "-"} !`
       );
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Quick +1 Win or +1 Loss directly on a row in the standings table
-  const handleQuickRowResult = async (entry: CompetitionRankingEntry, outcome: "win" | "loss") => {
+  // Quick +1 Win, +1 Draw or +1 Loss directly on a row in the standings table
+  const handleQuickRowResult = async (entry: CompetitionRankingEntry, outcome: "win" | "draw" | "loss") => {
     if (!activeTournament || isSaving) return;
 
     const signature = `${activeTournament.id}|quick|${entry.gamerTag.toLowerCase()}|${outcome}`;
@@ -415,9 +434,11 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
       const nextEntry = updated.entries.find(
         (e) => e.gamerTag.trim().toLowerCase() === entry.gamerTag.trim().toLowerCase()
       );
+      const quickLabel =
+        outcome === "win" ? "+1 Victoire" : outcome === "draw" ? "+1 Match nul" : "+1 Défaite";
       sfx.playSuccess();
       onToast(
-        `${outcome === "win" ? "+1 Victoire" : "+1 Défaite"} pour ${entry.gamerTag} → ${nextEntry?.points ?? 0} pts (#${nextEntry?.position ?? "-"})`
+        `${quickLabel} pour ${entry.gamerTag} → ${nextEntry?.points ?? 0} pts (#${nextEntry?.position ?? "-"})`
       );
     } finally {
       setIsSaving(false);
@@ -635,7 +656,7 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
           </h3>
         </div>
         <p className="font-['Chakra_Petch'] text-xs text-slate-400">
-          Créez d'abord une compétition pour configurer son barème de points et enregistrer les victoires/défaites des joueurs.
+          Créez d'abord une compétition pour configurer son barème de points et enregistrer les victoires, matchs nuls et défaites des joueurs.
         </p>
       </div>
     );
@@ -657,7 +678,7 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
             GESTION DES RÉSULTATS & STATISTIQUES JOUEURS
           </h3>
           <p className="font-['Chakra_Petch'] text-xs text-slate-400">
-            Saisissez uniquement les victoires et défaites de chaque joueur : les points, matchs joués, différences et rangs se calculent automatiquement par catégorie.
+            Saisissez uniquement les victoires, matchs nuls et défaites de chaque joueur : les points, matchs joués, différences et rangs se calculent automatiquement par catégorie.
           </p>
         </div>
 
@@ -871,6 +892,20 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
             </div>
 
             <div className="flex-1">
+              <label className="block text-sky-300 font-bold mb-1">
+                Points par Nul
+              </label>
+              <input
+                type="number"
+                step="any"
+                required
+                value={drawPointsInput}
+                onChange={(e) => setDrawPointsInput(e.target.value)}
+                className="w-full rounded-xl border border-sky-500/30 bg-[#141824] px-3 py-2 font-['Orbitron'] font-bold text-sky-300 focus:border-sky-400 focus:outline-none tabular-nums"
+              />
+            </div>
+
+            <div className="flex-1">
               <label className="block text-rose-300 font-bold mb-1">
                 Points par Défaite
               </label>
@@ -917,7 +952,7 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
                 <Users size={13} />
                 <span>
                   {uninitializedPlayersCount > 0
-                    ? `Charger ${uninitializedPlayersCount} inscrit(s) à 0V/0D`
+                    ? `Charger ${uninitializedPlayersCount} inscrit(s) à 0V/0N/0D`
                     : `Tous les inscrits chargés (${tournamentPlayers.length})`}
                 </span>
               </button>
@@ -1057,12 +1092,24 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
             <button
               type="button"
               disabled={isSaving}
+              onClick={() => handleRecordResult("draw")}
+              className="flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/15 hover:bg-sky-500/25 px-5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-sky-200 transition active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              <Equal size={15} />
+              <span>
+                Enregistrer Nul ({activeRule.drawPoints >= 0 ? `+${activeRule.drawPoints}` : activeRule.drawPoints} {Math.abs(activeRule.drawPoints) > 1 ? "pts" : "pt"})
+              </span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isSaving}
               onClick={() => handleRecordResult("loss")}
               className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/25 px-5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-rose-200 transition active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               <XCircle size={15} />
               <span>
-                Enregistrer Défaite ({activeRule.lossPoints >= 0 ? `+${activeRule.lossPoints}` : activeRule.lossPoints} pt)
+                Enregistrer Défaite ({activeRule.lossPoints >= 0 ? `+${activeRule.lossPoints}` : activeRule.lossPoints} {Math.abs(activeRule.lossPoints) > 1 ? "pts" : "pt"})
               </span>
             </button>
           </div>
@@ -1079,7 +1126,7 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
             </span>
           </h4>
           <span className="font-['JetBrains_Mono'] text-[11px] text-slate-400">
-            Actions rapides (+V / +D) mettent à jour rangs et points en direct
+            Actions rapides (+V / +N / +D) mettent à jour rangs et points en direct
           </span>
         </div>
 
@@ -1101,6 +1148,7 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
                   <th className="py-2.5 px-3">JOUEUR</th>
                   <th className="py-2.5 px-3 text-center">MATCHS</th>
                   <th className="py-2.5 px-3 text-center">VICTOIRES</th>
+                  <th className="py-2.5 px-3 text-center">NULS</th>
                   <th className="py-2.5 px-3 text-center">DÉFAITES</th>
                   <th className="py-2.5 px-3 text-center">DIFF.</th>
                   <th className="py-2.5 px-3 text-center">POINTS</th>
@@ -1110,7 +1158,9 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
               </thead>
               <tbody className="divide-y divide-white/5">
                 {entries.map((entry) => {
-                  const matches = entry.matchesPlayed ?? ((entry.wins ?? 0) + (entry.losses ?? 0));
+                  const matches =
+                    entry.matchesPlayed ??
+                    ((entry.wins ?? 0) + (entry.draws ?? 0) + (entry.losses ?? 0));
                   const diff = entry.scoreDiff ?? 0;
                   const isEditingReward = editingRewardEntryId === entry.id;
                   const isConfirmingRemove = confirmRemoveTag === entry.gamerTag;
@@ -1146,6 +1196,10 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
 
                       <td className="py-3 px-3 text-center text-emerald-400 font-bold tabular-nums">
                         {entry.wins ?? 0}
+                      </td>
+
+                      <td className="py-3 px-3 text-center text-sky-400 font-bold tabular-nums">
+                        {entry.draws ?? 0}
                       </td>
 
                       <td className="py-3 px-3 text-center text-rose-400 font-bold tabular-nums">
@@ -1258,6 +1312,15 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
                             <button
                               type="button"
                               disabled={isSaving}
+                              onClick={() => handleQuickRowResult(entry, "draw")}
+                              title={`Ajouter 1 Match nul (${activeRule.drawPoints >= 0 ? `+${activeRule.drawPoints}` : activeRule.drawPoints} ${Math.abs(activeRule.drawPoints) > 1 ? "pts" : "pt"})`}
+                              className="rounded-lg border border-sky-500/40 bg-sky-500/15 hover:bg-sky-500/30 px-2 py-1 text-[11px] font-bold text-sky-300 transition active:scale-95 disabled:opacity-40 cursor-pointer"
+                            >
+                              +N
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSaving}
                               onClick={() => handleQuickRowResult(entry, "loss")}
                               title={`Ajouter 1 Défaite (+${activeRule.lossPoints} pt)`}
                               className="rounded-lg border border-rose-500/40 bg-rose-500/15 hover:bg-rose-500/30 px-2 py-1 text-[11px] font-bold text-rose-300 transition active:scale-95 disabled:opacity-40 cursor-pointer"
@@ -1316,7 +1379,7 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
 
           {filteredHistory.length === 0 ? (
             <p className="font-['Chakra_Petch'] text-xs text-slate-400 py-2">
-              Aucun résultat enregistré dans l'historique pour cette sélection. Chaque victoire ou défaite ajoutée apparaîtra ici pour pouvoir être corrigée ou annulée à tout moment.
+              Aucun résultat enregistré dans l'historique pour cette sélection. Chaque victoire, match nul ou défaite ajouté apparaîtra ici pour pouvoir être corrigé ou annulé à tout moment.
             </p>
           ) : (
             <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
@@ -1340,10 +1403,12 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
                             className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
                               ev.outcome === "win"
                                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                : ev.outcome === "draw"
+                                ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
                                 : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
                             }`}
                           >
-                            {ev.outcome === "win" ? "VICTOIRE" : "DÉFAITE"}
+                            {ev.outcome === "win" ? "VICTOIRE" : ev.outcome === "draw" ? "NUL" : "DÉFAITE"}
                           </span>
 
                           <strong className="font-['Orbitron'] text-white">{ev.gamerTag}</strong>
@@ -1435,6 +1500,17 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
                               }`}
                             >
                               Victoire
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditOutcome("draw")}
+                              className={`rounded-lg px-3 py-1 font-bold cursor-pointer ${
+                                editOutcome === "draw"
+                                  ? "bg-sky-600 text-white"
+                                  : "border border-white/15 text-slate-300"
+                              }`}
+                            >
+                              Nul
                             </button>
                             <button
                               type="button"

@@ -133,11 +133,12 @@ export const EsportRankingsPublic: React.FC<EsportRankingsPublicProps> = ({
   );
 
   const renderPodiumStats = (entry: CompetitionRankingEntry) => {
-    const matches = entry.matchesPlayed ?? ((entry.wins ?? 0) + (entry.losses ?? 0));
+    const matches =
+      entry.matchesPlayed ?? ((entry.wins ?? 0) + (entry.draws ?? 0) + (entry.losses ?? 0));
     const parts: string[] = [
       `${entry.points ?? 0} pts`,
       `${matches} match${matches > 1 ? "s" : ""}`,
-      `${entry.wins ?? 0}V / ${entry.losses ?? 0}D`,
+      `${entry.wins ?? 0}V / ${entry.draws ?? 0}N / ${entry.losses ?? 0}D`,
     ];
     if (entry.scoreDiff !== undefined && entry.scoreDiff !== 0) {
       parts.push(`Diff ${entry.scoreDiff > 0 ? `+${entry.scoreDiff}` : entry.scoreDiff}`);
@@ -314,7 +315,7 @@ export const EsportRankingsPublic: React.FC<EsportRankingsPublicProps> = ({
                 )}
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 text-emerald-300 font-bold">
                   <span>
-                    Barème : Victoire = {activeScoringRule.winPoints >= 0 ? `+${activeScoringRule.winPoints}` : activeScoringRule.winPoints} pts • Défaite = {activeScoringRule.lossPoints} pt
+                    Barème : Victoire = {activeScoringRule.winPoints >= 0 ? `+${activeScoringRule.winPoints}` : activeScoringRule.winPoints} pts • Nul = {activeScoringRule.drawPoints >= 0 ? `+${activeScoringRule.drawPoints}` : activeScoringRule.drawPoints} {Math.abs(activeScoringRule.drawPoints) > 1 ? "pts" : "pt"} • Défaite = {activeScoringRule.lossPoints} {Math.abs(activeScoringRule.lossPoints) > 1 ? "pts" : "pt"}
                   </span>
                 </span>
               </div>
@@ -454,13 +455,15 @@ export const EsportRankingsPublic: React.FC<EsportRankingsPublicProps> = ({
                     <th className="py-3 px-3">JOUEUR</th>
                     <th className="py-3 px-3 text-center">MATCHS</th>
                     <th className="py-3 px-3 text-center">VICTOIRES</th>
+                    <th className="py-3 px-3 text-center">NULS</th>
                     <th className="py-3 px-3 text-center">DÉFAITES</th>
                     <th className="py-3 px-3 text-right">POINTS</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {activeRanking.entries.map((entry) => {
-                    const matches = entry.matchesPlayed ?? ((entry.wins ?? 0) + (entry.losses ?? 0));
+                    const matches =
+                      entry.matchesPlayed ?? ((entry.wins ?? 0) + (entry.draws ?? 0) + (entry.losses ?? 0));
                     const isTop1 = entry.position === 1;
                     const isTop2 = entry.position === 2;
                     const isTop3 = entry.position === 3;
@@ -518,6 +521,10 @@ export const EsportRankingsPublic: React.FC<EsportRankingsPublicProps> = ({
 
                         <td className="py-3.5 px-3 text-center font-bold text-emerald-400 tabular-nums">
                           {entry.wins ?? 0}
+                        </td>
+
+                        <td className="py-3.5 px-3 text-center font-bold text-sky-400 tabular-nums">
+                          {entry.draws ?? 0}
                         </td>
 
                         <td className="py-3.5 px-3 text-center font-bold text-rose-400 tabular-nums">

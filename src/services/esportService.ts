@@ -249,6 +249,7 @@ export function saveEsportLicenses(lics: EsportLicense[]): boolean {
 
 export const DEFAULT_SCORING_RULE: ScoringRule = {
   winPoints: 3,
+  drawPoints: 1,
   lossPoints: 0,
 };
 
@@ -257,11 +258,15 @@ export function getNormalizedScoringRule(rule?: Partial<ScoringRule> | null): Sc
     rule?.winPoints !== undefined && rule?.winPoints !== null && Number.isFinite(Number(rule.winPoints))
       ? Number(rule.winPoints)
       : DEFAULT_SCORING_RULE.winPoints;
+  const drawPts =
+    rule?.drawPoints !== undefined && rule?.drawPoints !== null && Number.isFinite(Number(rule.drawPoints))
+      ? Number(rule.drawPoints)
+      : DEFAULT_SCORING_RULE.drawPoints;
   const lossPts =
     rule?.lossPoints !== undefined && rule?.lossPoints !== null && Number.isFinite(Number(rule.lossPoints))
       ? Number(rule.lossPoints)
       : DEFAULT_SCORING_RULE.lossPoints;
-  return { winPoints: winPts, lossPoints: lossPts };
+  return { winPoints: winPts, drawPoints: drawPts, lossPoints: lossPts };
 }
 
 export function normalizeRankingEntries(entries: CompetitionRankingEntry[]): CompetitionRankingEntry[] {
@@ -282,6 +287,7 @@ export function normalizeRankingEntries(entries: CompetitionRankingEntry[]): Com
           ? Number(e.scoreDiff)
           : undefined,
       wins: e.wins !== undefined && e.wins !== null && !isNaN(Number(e.wins)) ? Number(e.wins) : undefined,
+      draws: e.draws !== undefined && e.draws !== null && !isNaN(Number(e.draws)) ? Number(e.draws) : undefined,
       losses: e.losses !== undefined && e.losses !== null && !isNaN(Number(e.losses)) ? Number(e.losses) : undefined,
       matchesPlayed: e.matchesPlayed !== undefined && e.matchesPlayed !== null && !isNaN(Number(e.matchesPlayed))
         ? Number(e.matchesPlayed)
@@ -291,6 +297,10 @@ export function normalizeRankingEntries(entries: CompetitionRankingEntry[]): Com
       seedWins:
         e.seedWins !== undefined && e.seedWins !== null && Number.isFinite(Number(e.seedWins))
           ? Number(e.seedWins)
+          : undefined,
+      seedDraws:
+        e.seedDraws !== undefined && e.seedDraws !== null && Number.isFinite(Number(e.seedDraws))
+          ? Number(e.seedDraws)
           : undefined,
       seedLosses:
         e.seedLosses !== undefined && e.seedLosses !== null && Number.isFinite(Number(e.seedLosses))
@@ -308,7 +318,12 @@ export function normalizeRankingEntries(entries: CompetitionRankingEntry[]): Com
 export function normalizeMatchHistory(history?: RankingResultEvent[]): RankingResultEvent[] {
   if (!Array.isArray(history)) return [];
   return history
-    .filter((ev) => ev && String(ev.gamerTag || "").trim().length > 0 && (ev.outcome === "win" || ev.outcome === "loss"))
+    .filter(
+      (ev) =>
+        ev &&
+        String(ev.gamerTag || "").trim().length > 0 &&
+        (ev.outcome === "win" || ev.outcome === "draw" || ev.outcome === "loss")
+    )
     .map((ev, idx) => {
       const hasScores =
         ev.playerScore !== undefined &&
@@ -358,6 +373,7 @@ export function recomputeCompetitionRanking(
 
   type AggPlayer = CompetitionRankingEntry & {
     _seedWins: number;
+    _seedDraws: number;
     _seedLosses: number;
     _seedScoreDiff: number;
     _hasHistory: boolean;
@@ -380,6 +396,12 @@ export function recomputeCompetitionRanking(
         : !hasHistoryArray
         ? e.wins ?? 0
         : 0;
+    const seedDr =
+      e.seedDraws !== undefined
+        ? e.seedDraws
+        : !hasHistoryArray
+        ? e.draws ?? 0
+        : 0;
     const seedL =
       e.seedLosses !== undefined
         ? e.seedLosses
@@ -397,9 +419,11 @@ export function recomputeCompetitionRanking(
       playerMap.set(key, {
         ...e,
         seedWins: seedW,
+        seedDraws: seedDr,
         seedLosses: seedL,
         seedScoreDiff: seedDiff,
         _seedWins: seedW,
+        _seedDraws: seedDr,
         _seedLosses: seedL,
         _seedScoreDiff: seedDiff,
         _hasHistory: false,
@@ -414,6 +438,7 @@ export function recomputeCompetitionRanking(
 
   // Accumulate from matchHistory
   const winCountMap = new Map<string, number>();
+  const drawCountMap = new Map<string, number>();
   const lossCountMap = new Map<string, number>();
   const diffSumMap = new Map<string, number>();
 
@@ -427,14 +452,17 @@ export function recomputeCompetitionRanking(
         gamerTag: ev.gamerTag,
         fullName: ev.fullName,
         wins: 0,
+        draws: 0,
         losses: 0,
         matchesPlayed: 0,
         points: 0,
         scoreDiff: 0,
         seedWins: 0,
+        seedDraws: 0,
         seedLosses: 0,
         seedScoreDiff: 0,
         _seedWins: 0,
+        _seedDraws: 0,
         _seedLosses: 0,
         _seedScoreDiff: 0,
         _hasHistory: true,
@@ -447,6 +475,8 @@ export function recomputeCompetitionRanking(
 
     if (ev.outcome === "win") {
       winCountMap.set(key, (winCountMap.get(key) || 0) + 1);
+    } else if (ev.outcome === "draw") {
+      drawCountMap.set(key, (drawCountMap.get(key) || 0) + 1);
     } else {
       lossCountMap.set(key, (lossCountMap.get(key) || 0) + 1);
     }
@@ -458,15 +488,17 @@ export function recomputeCompetitionRanking(
   const computedEntries: CompetitionRankingEntry[] = [];
   playerMap.forEach((player, key) => {
     const wins = player._seedWins + (winCountMap.get(key) || 0);
+    const draws = player._seedDraws + (drawCountMap.get(key) || 0);
     const losses = player._seedLosses + (lossCountMap.get(key) || 0);
-    const matchesPlayed = wins + losses;
+    const matchesPlayed = wins + draws + losses;
     const scoreDiff = player._seedScoreDiff + (diffSumMap.get(key) || 0);
-    const points = wins * rule.winPoints + losses * rule.lossPoints;
+    const points = wins * rule.winPoints + draws * rule.drawPoints + losses * rule.lossPoints;
 
-    const { _seedWins, _seedLosses, _seedScoreDiff, _hasHistory, ...clean } = player;
+    const { _seedWins, _seedDraws, _seedLosses, _seedScoreDiff, _hasHistory, ...clean } = player;
     computedEntries.push({
       ...clean,
       wins,
+      draws,
       losses,
       matchesPlayed,
       scoreDiff,
@@ -546,7 +578,7 @@ export function recordPlayerMatchResult(
     playerId?: string;
     gamerTag: string;
     fullName?: string;
-    outcome: "win" | "loss";
+    outcome: "win" | "draw" | "loss";
     playerScore?: number;
     opponentScore?: number;
     opponentTag?: string;
@@ -589,7 +621,7 @@ export function updatePlayerMatchResult(
   ranking: CompetitionRanking,
   eventId: string,
   updates: {
-    outcome: "win" | "loss";
+    outcome: "win" | "draw" | "loss";
     playerScore?: number;
     opponentScore?: number;
     opponentTag?: string;
@@ -656,11 +688,13 @@ export function initializeRegisteredPlayersInRanking(
       gamerTag: tag,
       fullName: reg.fullName || undefined,
       wins: 0,
+      draws: 0,
       losses: 0,
       matchesPlayed: 0,
       points: 0,
       scoreDiff: 0,
       seedWins: 0,
+      seedDraws: 0,
       seedLosses: 0,
       seedScoreDiff: 0,
     });
@@ -1363,13 +1397,14 @@ export function parseRankingSheetText(rawText: string): {
     "position", "pos", "rang", "rank", "classement", "#", "place",
     "pseudo", "gamertag", "joueur", "player", "nom", "competiteur",
     "point", "pts", "score", "resultat", "stat", "victoire", "win",
+    "nul", "nuls", "draw", "draws", "egalite",
     "defaite", "loss", "recompense", "prize", "cash", "lot", "gain",
   ];
   const looksLikeHeader = firstRow.some((cell) =>
     headerKeywords.some((kw) => cell === kw || cell.includes(kw))
   );
 
-  type ColRole = "position" | "gamerTag" | "fullName" | "points" | "score" | "wins" | "losses" | "statsNote" | "reward";
+  type ColRole = "position" | "gamerTag" | "fullName" | "points" | "score" | "wins" | "draws" | "losses" | "statsNote" | "reward";
   const colMap = new Map<number, ColRole>();
 
   let dataRows = rows;
@@ -1382,6 +1417,7 @@ export function parseRankingSheetText(rawText: string): {
       else if (h.includes("point") || h === "pts") colMap.set(idx, "points");
       else if (h.includes("score") || h.includes("resultat")) colMap.set(idx, "score");
       else if (h.includes("victoire") || h === "v" || h === "wins" || h === "win") colMap.set(idx, "wins");
+      else if (h.includes("nul") || h.includes("draw") || h.includes("egalite") || h === "n") colMap.set(idx, "draws");
       else if (h.includes("defaite") || h === "d" || h === "losses" || h === "loss") colMap.set(idx, "losses");
       else if (h.includes("stat") || h.includes("note") || h.includes("ratio") || h.includes("detail")) colMap.set(idx, "statsNote");
       else if (h.includes("recompense") || h.includes("cash") || h.includes("prize") || h.includes("lot") || h.includes("gain")) colMap.set(idx, "reward");
@@ -1414,6 +1450,7 @@ export function parseRankingSheetText(rawText: string): {
     let points: number | undefined;
     let score = "";
     let wins: number | undefined;
+    let draws: number | undefined;
     let losses: number | undefined;
     let statsNote = "";
     let reward = "";
@@ -1431,6 +1468,7 @@ export function parseRankingSheetText(rawText: string): {
           else if (!score) score = cell;
         } else if (role === "score") score = cell;
         else if (role === "wins") wins = parseNumeric(cell);
+        else if (role === "draws") draws = parseNumeric(cell);
         else if (role === "losses") losses = parseNumeric(cell);
         else if (role === "statsNote") statsNote = cell;
         else if (role === "reward") reward = cell;
@@ -1488,6 +1526,7 @@ export function parseRankingSheetText(rawText: string): {
       points,
       score: score || undefined,
       wins,
+      draws,
       losses,
       statsNote: statsNote || undefined,
       reward: reward || undefined,
@@ -1534,8 +1573,9 @@ export function exportCompetitionRankingCsv(ranking: CompetitionRanking): void {
     Rang: e.position,
     Joueur: e.gamerTag,
     "Nom complet": e.fullName || "",
-    Matchs: e.matchesPlayed ?? ((e.wins ?? 0) + (e.losses ?? 0)),
+    Matchs: e.matchesPlayed ?? ((e.wins ?? 0) + (e.draws ?? 0) + (e.losses ?? 0)),
     Victoires: e.wins ?? 0,
+    Nuls: e.draws ?? 0,
     Defaites: e.losses ?? 0,
     Difference: e.scoreDiff ?? 0,
     Points: e.points ?? 0,

@@ -207,6 +207,7 @@ export interface EsportPlayer {
 
 export interface ScoringRule {
   winPoints: number;
+  drawPoints: number;
   lossPoints: number;
 }
 
@@ -215,7 +216,7 @@ export interface RankingResultEvent {
   playerId?: string;
   gamerTag: string;
   fullName?: string;
-  outcome: "win" | "loss";
+  outcome: "win" | "draw" | "loss";
   playerScore?: number;
   opponentScore?: number;
   scoreDiff?: number;
@@ -234,12 +235,14 @@ export interface CompetitionRankingEntry {
   score?: string;
   scoreDiff?: number;
   wins?: number;
+  draws?: number;
   losses?: number;
   matchesPlayed?: number;
   statsNote?: string;
   reward?: string;
   // Optional legacy baseline when migrating older manual rankings without matchHistory
   seedWins?: number;
+  seedDraws?: number;
   seedLosses?: number;
   seedScoreDiff?: number;
 }

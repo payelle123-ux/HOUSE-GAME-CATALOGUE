@@ -321,7 +321,7 @@ async function refreshLiveKnowledgeNow(): Promise<KnowledgeSnapshot> {
     const top3 = Array.isArray(rk.entries)
       ? rk.entries
           .slice(0, 5)
-          .map((e: any) => `#${e.position} ${e.gamerTag} (${e.points ?? 0} pts, ${e.wins ?? 0}V-${e.losses ?? 0}D)`)
+          .map((e: any) => `#${e.position} ${e.gamerTag} (${e.points ?? 0} pts, ${e.wins ?? 0}V-${e.draws ?? 0}N-${e.losses ?? 0}D)`)
           .join(" ; ")
       : "";
     lines.push(`- ${rk.tournamentTitle} (${rk.game}) : Top classement -> ${top3 || "Classement en attente"}`);
