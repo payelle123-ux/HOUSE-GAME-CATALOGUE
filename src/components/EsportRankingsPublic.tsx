@@ -315,7 +315,7 @@ export const EsportRankingsPublic: React.FC<EsportRankingsPublicProps> = ({
                 )}
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 text-emerald-300 font-bold">
                   <span>
-                    Barème : Victoire = {activeScoringRule.winPoints >= 0 ? `+${activeScoringRule.winPoints}` : activeScoringRule.winPoints} pts • Nul = {activeScoringRule.drawPoints >= 0 ? `+${activeScoringRule.drawPoints}` : activeScoringRule.drawPoints} {Math.abs(activeScoringRule.drawPoints) > 1 ? "pts" : "pt"} • Défaite = {activeScoringRule.lossPoints} {Math.abs(activeScoringRule.lossPoints) > 1 ? "pts" : "pt"}
+                    Barème : Victoire = {activeScoringRule.winPoints >= 0 ? `+${activeScoringRule.winPoints}` : activeScoringRule.winPoints} {Math.abs(activeScoringRule.winPoints) > 1 ? "pts" : "pt"} • Nul = {activeScoringRule.drawPoints >= 0 ? `+${activeScoringRule.drawPoints}` : activeScoringRule.drawPoints} {Math.abs(activeScoringRule.drawPoints) > 1 ? "pts" : "pt"} • Défaite = {activeScoringRule.lossPoints} {Math.abs(activeScoringRule.lossPoints) > 1 ? "pts" : "pt"}
                   </span>
                 </span>
               </div>

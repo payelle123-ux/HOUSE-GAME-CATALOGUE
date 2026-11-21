@@ -318,13 +318,17 @@ async function refreshLiveKnowledgeNow(): Promise<KnowledgeSnapshot> {
 
   lines.push(`\n=== 7. CLASSEMENTS ESPORT PUBLIÉS (${rankings.filter((r) => r.isPublished).length}) ===`);
   for (const rk of rankings.filter((r) => r.isPublished)) {
+    const rule = rk.scoringRule || {};
+    const wPts = rule.winPoints ?? 3;
+    const dPts = rule.drawPoints ?? 1;
+    const lPts = rule.lossPoints ?? 0;
     const top3 = Array.isArray(rk.entries)
       ? rk.entries
           .slice(0, 5)
           .map((e: any) => `#${e.position} ${e.gamerTag} (${e.points ?? 0} pts, ${e.wins ?? 0}V-${e.draws ?? 0}N-${e.losses ?? 0}D)`)
           .join(" ; ")
       : "";
-    lines.push(`- ${rk.tournamentTitle} (${rk.game}) : Top classement -> ${top3 || "Classement en attente"}`);
+    lines.push(`- ${rk.tournamentTitle} (${rk.game}) [Barème: ${wPts}V/${dPts}N/${lPts}D] : Top classement -> ${top3 || "Classement en attente"}`);
   }
 
   lines.push(`\n=== 8. ÉVÉNEMENTS & HG EVENT (${events.length + hgEventsOfficial.length}) ===`);

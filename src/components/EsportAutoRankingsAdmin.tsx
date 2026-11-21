@@ -292,6 +292,36 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
     }
   };
 
+  const handleApplyStandardScoringRule = async () => {
+    if (!activeTournament || isSaving) return;
+    setWinPointsInput(String(DEFAULT_SCORING_RULE.winPoints));
+    setDrawPointsInput(String(DEFAULT_SCORING_RULE.drawPoints));
+    setLossPointsInput(String(DEFAULT_SCORING_RULE.lossPoints));
+    setIsSaving(true);
+    try {
+      const base = getWorkingBase();
+      const updated = recomputeCompetitionRanking(base, {
+        ...DEFAULT_SCORING_RULE,
+      });
+      await onSaveRanking(updated);
+
+      onAuditLog({
+        id: `log-${Date.now()}`,
+        action: "Réinitialisation barème standard (3 / 1 / 0)",
+        actor: "Direction Esport HG",
+        targetId: activeTournament.id,
+        targetType: "tournoi",
+        details: `Barème « ${activeTournament.title} » réinitialisé : Victoire = 3 pts, Nul = 1 pt, Défaite = 0 pt.`,
+        timestamp: Date.now(),
+      });
+
+      sfx.playSuccess();
+      onToast("Barème officiel (Victoire = 3 • Nul = 1 • Défaite = 0) appliqué et recalculé !");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // 2. Initialize all registered players (0V / 0D) into the ranking
   const handleInitRegisteredPlayers = async () => {
     if (!activeTournament || isSaving) return;
@@ -927,6 +957,32 @@ export const EsportAutoRankingsAdmin: React.FC<EsportAutoRankingsAdminProps> = (
               <RefreshCw size={13} />
               <span>Appliquer & Recalculer</span>
             </button>
+
+            {(activeRule.winPoints !== 3 ||
+              activeRule.drawPoints !== 1 ||
+              activeRule.lossPoints !== 0) && (
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={handleApplyStandardScoringRule}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-3.5 py-2.5 font-['JetBrains_Mono'] text-xs font-bold text-amber-300 transition active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                <span>Standard (3 / 1 / 0)</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1 font-['JetBrains_Mono'] text-[11px] text-slate-300">
+            <span className="text-slate-400">Barème actif :</span>
+            <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-emerald-300 font-bold">
+              Victoire = {activeRule.winPoints} {Math.abs(activeRule.winPoints) > 1 ? "pts" : "pt"}
+            </span>
+            <span className="rounded-md bg-sky-500/15 border border-sky-500/30 px-2 py-0.5 text-sky-300 font-bold">
+              Nul = {activeRule.drawPoints} {Math.abs(activeRule.drawPoints) > 1 ? "pts" : "pt"}
+            </span>
+            <span className="rounded-md bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 text-rose-300 font-bold">
+              Défaite = {activeRule.lossPoints} {Math.abs(activeRule.lossPoints) > 1 ? "pts" : "pt"}
+            </span>
           </div>
         </form>
       )}
